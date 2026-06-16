@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0d0f14">
-<title>Muay Thai HR Tracker</title>
+<title>Fight HR Tracker</title>
 <style>
   :root {
     --bg: #0d0f14;
@@ -117,6 +117,8 @@
   .seg { display: flex; background: var(--panel2); border-radius: 10px; overflow: hidden; }
   .seg button { padding: 8px 14px; border: none; background: none; color: var(--muted); font-size: 13px; font-weight: 700; cursor: pointer; }
   .seg button.on { background: var(--accent); color: #fff; }
+  .actSeg { width: 100%; }
+  .actSeg button { flex: 1; padding: 12px 0; font-size: 14px; }
 
   /* History */
   .sessionItem { background: var(--panel); border: 1px solid #20273a; border-radius: 12px; padding: 12px; margin-bottom: 10px; cursor: pointer; }
@@ -153,7 +155,7 @@
 <body>
 
 <header>
-  <h1>MUAY THAI <span>HR</span></h1>
+  <h1 id="appTitle">FIGHT <span>HR</span></h1>
   <div id="btStatus"><span id="btDot"></span><span id="btText">Not connected</span></div>
 </header>
 
@@ -164,6 +166,12 @@
       <b>Bluetooth not available in this browser.</b><br>
       On iPhone/iPad, open this page in the free <b>Bluefy</b> browser (App Store) — iOS Safari blocks Web Bluetooth.
       On Android/desktop use Chrome or Edge. You can still try Demo mode below.
+    </div>
+
+    <div class="card" style="padding:8px">
+      <div class="seg actSeg" id="actSeg">
+        <button data-v="mt">🥊 Muay Thai</button><button data-v="bjj">🥋 BJJ</button>
+      </div>
     </div>
 
     <div class="btnRow">
@@ -218,6 +226,11 @@
 
   <!-- ============ HISTORY TAB ============ -->
   <section id="tab-history" class="tab">
+    <div class="card" style="padding:8px">
+      <div class="seg actSeg" id="histFilter">
+        <button data-v="all" class="on">All</button><button data-v="mt">🥊 Muay Thai</button><button data-v="bjj">🥋 BJJ</button>
+      </div>
+    </div>
     <div class="card">
       <h3>Last 8 Weeks</h3>
       <canvas id="trendChart" height="150"></canvas>
@@ -259,7 +272,7 @@
     </div>
 
     <div class="card">
-      <h3>Session Mode</h3>
+      <h3>Session Mode — <span id="modeActHint"></span></h3>
       <div class="formRow"><label>Mode</label>
         <div class="seg" id="mMode">
           <button data-v="continuous">Continuous</button><button data-v="rounds">Rounds</button>
@@ -312,14 +325,39 @@
 const ZONE_COLORS = ["#5d8aa8", "#2a9d8f", "#e9c46a", "#f4a261", "#e63946"];
 const ZONE_NAMES = ["Z1 Recovery", "Z2 Endurance", "Z3 Tempo", "Z4 Threshold", "Z5 Max"];
 const LS_PROFILE = "mthr_profile";
-const LS_TIMER = "mthr_timer";
+const LS_TIMER = "mthr_timer";       // { mt:{...}, bjj:{...} }
 const LS_SESSIONS = "mthr_sessions";
+const LS_ACTIVITY = "mthr_activity";
+
+const ACTIVITIES = {
+  mt:  { label: "Muay Thai", icon: "🥊" },
+  bjj: { label: "BJJ",       icon: "🥋" },
+};
 
 const defaultProfile = { age: 30, weight: 75, sex: "m", maxHr: 0, restHr: 55, zoneMethod: "karvonen" };
-const defaultTimer = { mode: "continuous", roundMin: 3, restMin: 1, rounds: 5, bells: "on" };
+// Per-sport defaults: Muay Thai 3min rounds / 1min rest; BJJ 5min rolls / 1min rest.
+const defaultTimers = {
+  mt:  { mode: "continuous", roundMin: 3, restMin: 1, rounds: 5, bells: "on" },
+  bjj: { mode: "continuous", roundMin: 5, restMin: 1, rounds: 5, bells: "on" },
+};
 
 let profile = load(LS_PROFILE, defaultProfile);
-let timerCfg = load(LS_TIMER, defaultTimer);
+let activity = localStorage.getItem(LS_ACTIVITY) || "mt";
+if (!ACTIVITIES[activity]) activity = "mt";
+let allTimers = loadTimers();
+let timerCfg = allTimers[activity];
+let histFilter = "all";
+
+function loadTimers() {
+  let stored = {};
+  try { stored = JSON.parse(localStorage.getItem(LS_TIMER)) || {}; } catch {}
+  // Migrate a legacy single-config object (pre-BJJ) into the Muay Thai slot.
+  if (stored && stored.mode && !stored.mt) stored = { mt: stored };
+  return {
+    mt:  Object.assign({}, defaultTimers.mt,  stored.mt  || {}),
+    bjj: Object.assign({}, defaultTimers.bjj, stored.bjj || {}),
+  };
+}
 
 const S = {
   device: null, server: null, hrChar: null,
@@ -601,6 +639,7 @@ function stopSession() {
     max: S.hrMax,
     zones: S.zoneSec.map(Math.round),
     mode: timerCfg.mode,
+    activity: activity,
     rounds: S.roundStats.map(r => ({
       n: r.n, avg: r.count ? Math.round(r.sum / r.count) : 0, max: r.max,
       kcal: Math.round(r.kcal * 10) / 10, recovery: r.recovery,
@@ -778,8 +817,14 @@ function showSummary(s) {
 
 /* ================= History ================= */
 
+function actName(a) { const x = ACTIVITIES[a]; return x ? x.icon + " " + x.label : ""; }
+
 function renderHistory() {
-  const all = loadSessions().slice().reverse();
+  let all = loadSessions().slice().reverse();
+  // Sessions saved before BJJ support default to Muay Thai.
+  all.forEach(s => { if (!s.activity) s.activity = "mt"; });
+  if (histFilter !== "all") all = all.filter(s => s.activity === histFilter);
+
   $("#histEmpty").style.display = all.length ? "none" : "";
   $("#hTotal").textContent = all.length;
   const totSec = all.reduce((a, s) => a + s.dur, 0);
@@ -793,7 +838,7 @@ function renderHistory() {
     const strip = s.zones.map((z, j) =>
       `<div style="width:${z / total * 100}%;background:${ZONE_COLORS[j]}"></div>`).join("");
     return `<div class="sessionItem" data-i="${i}">
-      <div class="top"><span class="d">${d.toLocaleDateString(undefined, {weekday:"short", month:"short", day:"numeric"})}</span>
+      <div class="top"><span class="d">${ACTIVITIES[s.activity]?.icon || ""} ${d.toLocaleDateString(undefined, {weekday:"short", month:"short", day:"numeric"})}</span>
         <span class="muted">${d.toLocaleTimeString(undefined, {hour:"2-digit", minute:"2-digit"})}</span></div>
       <div class="mini"><span><b>${fmtTime(s.dur)}</b></span><span><b>${s.kcal}</b> kcal</span>
         <span>avg <b>${s.avg}</b></span><span>max <b>${s.max}</b></span>
@@ -846,15 +891,16 @@ function drawTrend(all) {
 function exportCsv() {
   const all = loadSessions();
   if (!all.length) return alert("No sessions to export.");
-  let csv = "date,time,duration_sec,kcal,avg_hr,max_hr,z1_sec,z2_sec,z3_sec,z4_sec,z5_sec,mode,rounds\n";
+  let csv = "date,time,activity,duration_sec,kcal,avg_hr,max_hr,z1_sec,z2_sec,z3_sec,z4_sec,z5_sec,mode,rounds\n";
   for (const s of all) {
     const d = new Date(s.ts);
-    csv += [d.toISOString().slice(0, 10), d.toTimeString().slice(0, 5), s.dur, s.kcal, s.avg, s.max,
+    const act = ACTIVITIES[s.activity || "mt"] ? (s.activity || "mt") : "mt";
+    csv += [d.toISOString().slice(0, 10), d.toTimeString().slice(0, 5), act, s.dur, s.kcal, s.avg, s.max,
       ...s.zones, s.mode, (s.rounds || []).length].join(",") + "\n";
   }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-  a.download = "muay-thai-sessions.csv";
+  a.download = "fight-hr-sessions.csv";
   a.click();
 }
 
@@ -880,6 +926,7 @@ function initSettings() {
   $("#mRounds").value = timerCfg.rounds;
 
   bindSeg("#pSex", () => profile.sex, v => profile.sex = v);
+  // Timer segments resolve timerCfg by name, so they follow the active sport.
   bindSeg("#mMode", () => timerCfg.mode, v => timerCfg.mode = v);
   bindSeg("#mBells", () => timerCfg.bells, v => timerCfg.bells = v);
 
@@ -890,15 +937,50 @@ function initSettings() {
   numBind("#pMaxHr", profile, "maxHr", v => parseInt(v));
   numBind("#pRestHr", profile, "restHr", v => parseInt(v));
   $("#pZoneMethod").addEventListener("change", e => { profile.zoneMethod = e.target.value; afterSettingsChange(); });
-  numBind("#mRoundMin", timerCfg, "roundMin");
-  numBind("#mRestMin", timerCfg, "restMin");
-  numBind("#mRounds", timerCfg, "rounds", v => parseInt(v));
+  // Timer numbers write to whichever sport is active.
+  const tNumBind = (sel, key, f = parseFloat) =>
+    $(sel).addEventListener("change", e => { timerCfg[key] = f(e.target.value) || 0; afterSettingsChange(); });
+  tNumBind("#mRoundMin", "roundMin");
+  tNumBind("#mRestMin", "restMin");
+  tNumBind("#mRounds", "rounds", v => parseInt(v));
+
+  // Activity switcher (Train tab) and history filter
+  $("#actSeg").addEventListener("click", e => { if (e.target.dataset.v) switchActivity(e.target.dataset.v); });
+  $("#histFilter").addEventListener("click", e => {
+    if (!e.target.dataset.v) return;
+    histFilter = e.target.dataset.v;
+    [...$("#histFilter").children].forEach(b => b.classList.toggle("on", b.dataset.v === histFilter));
+    renderHistory();
+  });
+
+  switchActivity(activity);
+}
+
+// Switch active sport: swaps in its timer config and refreshes the UI.
+function switchActivity(a) {
+  if (!ACTIVITIES[a] || S.running) return;
+  activity = a;
+  localStorage.setItem(LS_ACTIVITY, a);
+  timerCfg = allTimers[a];
+  [...$("#actSeg").children].forEach(b => b.classList.toggle("on", b.dataset.v === a));
+  $("#appTitle").innerHTML = ACTIVITIES[a].label.toUpperCase() + " <span>HR</span>";
+  $("#modeActHint").textContent = ACTIVITIES[a].icon + " " + ACTIVITIES[a].label;
+  syncTimerInputs();
   afterSettingsChange();
+}
+
+function syncTimerInputs() {
+  $("#mRoundMin").value = timerCfg.roundMin;
+  $("#mRestMin").value = timerCfg.restMin;
+  $("#mRounds").value = timerCfg.rounds;
+  [...$("#mMode").children].forEach(b => b.classList.toggle("on", b.dataset.v === timerCfg.mode));
+  [...$("#mBells").children].forEach(b => b.classList.toggle("on", b.dataset.v === timerCfg.bells));
 }
 
 function afterSettingsChange() {
   save(LS_PROFILE, profile);
-  save(LS_TIMER, timerCfg);
+  allTimers[activity] = timerCfg;
+  save(LS_TIMER, allTimers);
   $("#roundSettings").style.display = timerCfg.mode === "rounds" ? "" : "none";
   // zone preview
   const b = zoneBounds();
