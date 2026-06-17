@@ -1,0 +1,305 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		E0EEC65C8515AFD265B9F24F /* Activity.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF12A316E8E908C0E4892DCC /* Activity.swift */; };
+		F13ED8E3D177323D701919E0 /* Bells.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31B0A758B25606B28C57C407 /* Bells.swift */; };
+		E0ABE0F25A04ED1BE452A743 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = D792EAA11052AEDB61F993EE /* Components.swift */; };
+		606BE0D07901060DB608E106 /* FightHRApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 660A7069DF7A5CEDE8425AA8 /* FightHRApp.swift */; };
+		56203B2286259737FDA0963A /* HeartRateMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C937B15EA731019C0A8D3A27 /* HeartRateMonitor.swift */; };
+		9676FAE99AA98ACDC7DBFB1D /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1860E117A76F489E2DFF400 /* HistoryView.swift */; };
+		D3717F9EC010F6F87A0902E9 /* Profile.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC4D7D52694210D3AB1EBADE /* Profile.swift */; };
+		FBE6DBF0009D1B4EBD448FC0 /* Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1039290E872B7D359AE57379 /* Session.swift */; };
+		846A3514733DE8DBC7788DBE /* SessionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1409A3132B57DD416727797B /* SessionEngine.swift */; };
+		827F3A899787AAFCE2E4FB46 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D42ABE680E51C13AD7E5D5AD /* SettingsView.swift */; };
+		72D767CB92F8BB985E81DEFF /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1DC8020FA0F1B1733C04995 /* Store.swift */; };
+		8A6E8B4B3218C64B5B0CDFDA /* SummarySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CFB01909606279196E08EBE /* SummarySheet.swift */; };
+		1D40C42D901D0775D3153AFB /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51994E6BAEFA4833CD319C39 /* Theme.swift */; };
+		22924F0F1CDC1A370FD5B4A5 /* TrainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DDB1CCE6B53583A3C3EC40A /* TrainView.swift */; };
+		A830920574F1D7FB14A9C920 /* Zones.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87485D3F6698EE1FB3EF1234 /* Zones.swift */; };
+		C2BEB0A13646DB198814C495 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 91AE334D8F929E977569F142 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		FF12A316E8E908C0E4892DCC /* Activity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Activity.swift; sourceTree = "<group>"; };
+		31B0A758B25606B28C57C407 /* Bells.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bells.swift; sourceTree = "<group>"; };
+		D792EAA11052AEDB61F993EE /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		660A7069DF7A5CEDE8425AA8 /* FightHRApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FightHRApp.swift; sourceTree = "<group>"; };
+		C937B15EA731019C0A8D3A27 /* HeartRateMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateMonitor.swift; sourceTree = "<group>"; };
+		F1860E117A76F489E2DFF400 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		BC4D7D52694210D3AB1EBADE /* Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Profile.swift; sourceTree = "<group>"; };
+		1039290E872B7D359AE57379 /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
+		1409A3132B57DD416727797B /* SessionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionEngine.swift; sourceTree = "<group>"; };
+		D42ABE680E51C13AD7E5D5AD /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		E1DC8020FA0F1B1733C04995 /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
+		4CFB01909606279196E08EBE /* SummarySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummarySheet.swift; sourceTree = "<group>"; };
+		51994E6BAEFA4833CD319C39 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		5DDB1CCE6B53583A3C3EC40A /* TrainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainView.swift; sourceTree = "<group>"; };
+		87485D3F6698EE1FB3EF1234 /* Zones.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Zones.swift; sourceTree = "<group>"; };
+		91AE334D8F929E977569F142 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		53C9D268FFE16ABB337DD162 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		571CD3829D85311D5626CD79 /* FightHR.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FightHR.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		EB741EB20F8932ADC61B0107 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		956934E60556FDCE0710C957 = {
+			isa = PBXGroup;
+			children = (
+				EFF0382F83C90C0033198163 /* FightHR */,
+				CC0F68FE2D81F9614883F277 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		EFF0382F83C90C0033198163 /* FightHR */ = {
+			isa = PBXGroup;
+			children = (
+				FF12A316E8E908C0E4892DCC /* Activity.swift */,
+				31B0A758B25606B28C57C407 /* Bells.swift */,
+				D792EAA11052AEDB61F993EE /* Components.swift */,
+				660A7069DF7A5CEDE8425AA8 /* FightHRApp.swift */,
+				C937B15EA731019C0A8D3A27 /* HeartRateMonitor.swift */,
+				F1860E117A76F489E2DFF400 /* HistoryView.swift */,
+				BC4D7D52694210D3AB1EBADE /* Profile.swift */,
+				1039290E872B7D359AE57379 /* Session.swift */,
+				1409A3132B57DD416727797B /* SessionEngine.swift */,
+				D42ABE680E51C13AD7E5D5AD /* SettingsView.swift */,
+				E1DC8020FA0F1B1733C04995 /* Store.swift */,
+				4CFB01909606279196E08EBE /* SummarySheet.swift */,
+				51994E6BAEFA4833CD319C39 /* Theme.swift */,
+				5DDB1CCE6B53583A3C3EC40A /* TrainView.swift */,
+				87485D3F6698EE1FB3EF1234 /* Zones.swift */,
+				91AE334D8F929E977569F142 /* Assets.xcassets */,
+				53C9D268FFE16ABB337DD162 /* Info.plist */,
+			);
+			path = FightHR;
+			sourceTree = "<group>";
+		};
+		CC0F68FE2D81F9614883F277 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				571CD3829D85311D5626CD79 /* FightHR.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		3CF92D32E5C5A22CDC3CB9A1 /* FightHR */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9CB938BFDD04126E260AD355 /* Build configuration list for PBXNativeTarget "FightHR" */;
+			buildPhases = (
+				78B9FD9EA24CAE7E052DA17C /* Sources */,
+				EB741EB20F8932ADC61B0107 /* Frameworks */,
+				966E70EE9C017A93B235DDBA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FightHR;
+			productName = FightHR;
+			productReference = 571CD3829D85311D5626CD79 /* FightHR.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		48C3803766AEAA16C41F652A /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					3CF92D32E5C5A22CDC3CB9A1 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = C65C31100E411CC42337DAE2 /* Build configuration list for PBXProject "FightHR" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 956934E60556FDCE0710C957;
+			productRefGroup = CC0F68FE2D81F9614883F277 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				3CF92D32E5C5A22CDC3CB9A1 /* FightHR */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		966E70EE9C017A93B235DDBA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C2BEB0A13646DB198814C495 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		78B9FD9EA24CAE7E052DA17C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E0EEC65C8515AFD265B9F24F /* Activity.swift in Sources */,
+				F13ED8E3D177323D701919E0 /* Bells.swift in Sources */,
+				E0ABE0F25A04ED1BE452A743 /* Components.swift in Sources */,
+				606BE0D07901060DB608E106 /* FightHRApp.swift in Sources */,
+				56203B2286259737FDA0963A /* HeartRateMonitor.swift in Sources */,
+				9676FAE99AA98ACDC7DBFB1D /* HistoryView.swift in Sources */,
+				D3717F9EC010F6F87A0902E9 /* Profile.swift in Sources */,
+				FBE6DBF0009D1B4EBD448FC0 /* Session.swift in Sources */,
+				846A3514733DE8DBC7788DBE /* SessionEngine.swift in Sources */,
+				827F3A899787AAFCE2E4FB46 /* SettingsView.swift in Sources */,
+				72D767CB92F8BB985E81DEFF /* Store.swift in Sources */,
+				8A6E8B4B3218C64B5B0CDFDA /* SummarySheet.swift in Sources */,
+				1D40C42D901D0775D3153AFB /* Theme.swift in Sources */,
+				22924F0F1CDC1A370FD5B4A5 /* TrainView.swift in Sources */,
+				A830920574F1D7FB14A9C920 /* Zones.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		0DAD1609FF21DFE9FCDE033B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		EE3C69D72997DBC098893883 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		B91B4934A1FB728BCC6A5C90 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = FightHR/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fighthr.app;
+				PRODUCT_NAME = FightHR;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		B13AF5E8ECEE2022F24DAA90 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = FightHR/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fighthr.app;
+				PRODUCT_NAME = FightHR;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		C65C31100E411CC42337DAE2 /* Build configuration list for PBXProject "FightHR" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0DAD1609FF21DFE9FCDE033B /* Debug */,
+				EE3C69D72997DBC098893883 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		9CB938BFDD04126E260AD355 /* Build configuration list for PBXNativeTarget "FightHR" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B91B4934A1FB728BCC6A5C90 /* Debug */,
+				B13AF5E8ECEE2022F24DAA90 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 48C3803766AEAA16C41F652A /* Project object */;
+}
