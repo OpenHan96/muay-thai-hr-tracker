@@ -4,7 +4,7 @@ import UIKit
 
 /// Round-bell + warning tones, generated as short sine buffers (no asset files needed).
 /// Mirrors bell(times) / clack() from index.html. Adds haptics for the gym.
-enum Bells {
+enum Chime {
     private static let engine = AVAudioEngine()
     private static var started = false
 

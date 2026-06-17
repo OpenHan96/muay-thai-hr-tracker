@@ -45,7 +45,7 @@ final class SessionEngine: ObservableObject {
         zoneSec = Array(repeating: 0, count: 5); samples = []; liveRounds = []; warned = false
         if cfg.mode == .rounds {
             phase = .work; phaseLeft = cfg.roundMin * 60; round = 1
-            cur = Acc(n: 1); Bells.play(2, enabled: cfg.bells == .on)
+            cur = Acc(n: 1); Chime.play(2, enabled: cfg.bells == .on)
         } else {
             phase = .session; phaseLeft = 0; cur = nil
         }
@@ -115,15 +115,15 @@ final class SessionEngine: ObservableObject {
     private func tickRounds(_ dt: Double) {
         phaseLeft -= dt
         if cfg.bells == .on, phase == .work, phaseLeft <= 10, !warned {
-            warned = true; Bells.clack()
+            warned = true; Chime.clack()
         }
         if phaseLeft > 0 { return }
         warned = false
         if phase == .work {
             if let c = cur { liveRounds.append(roundStat(c)) }
-            if round >= cfg.rounds { Bells.play(3, enabled: cfg.bells == .on); stop(); return }
+            if round >= cfg.rounds { Chime.play(3, enabled: cfg.bells == .on); stop(); return }
             if cfg.restMin > 0 {
-                phase = .rest; phaseLeft = cfg.restMin * 60; Bells.play(1, enabled: cfg.bells == .on)
+                phase = .rest; phaseLeft = cfg.restMin * 60; Chime.play(1, enabled: cfg.bells == .on)
             } else { nextRound() }
         } else {
             nextRound()
@@ -132,7 +132,7 @@ final class SessionEngine: ObservableObject {
 
     private func nextRound() {
         round += 1; phase = .work; phaseLeft = cfg.roundMin * 60
-        cur = Acc(n: round); Bells.play(2, enabled: cfg.bells == .on)
+        cur = Acc(n: round); Chime.play(2, enabled: cfg.bells == .on)
     }
 
     private func roundStat(_ c: Acc) -> RoundStat {
