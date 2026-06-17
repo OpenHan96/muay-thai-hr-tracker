@@ -26,6 +26,8 @@ final class SessionEngine: ObservableObject {
     private var lastTick = Date()
     private var warned = false
     private var timer: AnyCancellable?
+    private var lastAnnouncedZone: Int? = nil
+    private var lastPeriodicAnnounce: Double = 0
 
     // mutable working round accumulator
     private struct Acc { var n: Int; var sum = 0.0; var count = 0.0; var max = 0; var kcal = 0.0
@@ -43,6 +45,7 @@ final class SessionEngine: ObservableObject {
         running = true; paused = false; startTs = Date(); lastTick = Date()
         elapsed = 0; calories = 0; hrSum = 0; hrCount = 0; hrMax = 0
         zoneSec = Array(repeating: 0, count: 5); samples = []; liveRounds = []; warned = false
+        lastAnnouncedZone = nil; lastPeriodicAnnounce = 0
         if cfg.mode == .rounds {
             phase = .work; phaseLeft = cfg.roundMin * 60; round = 1
             cur = Acc(n: 1); Chime.play(2, enabled: cfg.bells == .on)
@@ -108,8 +111,28 @@ final class SessionEngine: ObservableObject {
                 c.recovery = c.endHr - bpm
                 cur = c
             }
+            announceZoneIfNeeded(z)
         }
         if cfg.mode == .rounds { tickRounds(dt) }
+    }
+
+    /// Spoken zone cues per the user's VoiceMode setting.
+    private func announceZoneIfNeeded(_ z: Int) {
+        let mode = store.profile.voiceMode
+        guard mode != .off else { return }
+        var spoke = false
+        if mode.announcesOnChange, z != lastAnnouncedZone {
+            Announcer.announceZone(z)
+            spoke = true
+        }
+        if !spoke, mode.announcesPeriodic {
+            let interval = Double(max(10, store.profile.voiceIntervalSec))
+            if elapsed - lastPeriodicAnnounce >= interval {
+                Announcer.announceZone(z)
+                lastPeriodicAnnounce = elapsed
+            }
+        }
+        lastAnnouncedZone = z
     }
 
     private func tickRounds(_ dt: Double) {

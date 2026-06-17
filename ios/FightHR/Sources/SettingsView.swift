@@ -12,6 +12,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 profileSection
+                voiceSection
                 modeSection
                 zonePreviewSection
                 dataSection
@@ -46,6 +47,18 @@ struct SettingsView: View {
                 Text("% of Max HR").tag(ZoneMethod.maxhr)
                 Text("Karvonen (HR reserve)").tag(ZoneMethod.karvonen)
             }
+        }
+    }
+
+    private var voiceSection: some View {
+        Section("Voice zone announcements") {
+            Picker("Announce", selection: p.voiceMode) {
+                ForEach(VoiceMode.allCases, id: \.self) { m in Text(m.label).tag(m) }
+            }
+            if store.profile.voiceMode.announcesPeriodic {
+                Stepper("Every \(store.profile.voiceIntervalSec)s", value: p.voiceIntervalSec, in: 10...300, step: 5)
+            }
+            Button("Test voice") { Announcer.speak("Zone 3, Tempo") }
         }
     }
 
