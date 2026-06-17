@@ -26,6 +26,12 @@
     <string>Fight HR connects to your Bluetooth heart rate monitor to show live heart rate, zones and calories during training.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Fight HR uses your location during running sessions to track distance, pace and route.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Fight HR uses the camera to record training videos with your heart rate overlaid.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Fight HR records audio with your training videos.</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Fight HR saves your recorded training videos to your photo library.</string>
     <key>UILaunchScreen</key>
     <dict>
         <key>UIColorName</key>

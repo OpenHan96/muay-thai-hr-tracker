@@ -6,6 +6,7 @@ struct TrainView: View {
     @EnvironmentObject var engine: SessionEngine
     @EnvironmentObject var loc: LocationTracker
     @State private var showSummary = false
+    @State private var showRecord = false
     @State private var beat = false
 
     private var zone: Int { Zones.zoneOf(hr.bpm, store.profile) }
@@ -28,6 +29,15 @@ struct TrainView: View {
                     if store.timerCfg.mode == .rounds && !engine.liveRounds.isEmpty {
                         roundsCard
                     }
+                    Button {
+                        showRecord = true
+                    } label: {
+                        Label("Record video with HR overlay", systemImage: "video.fill")
+                            .frame(maxWidth: .infinity).padding(.vertical, 12)
+                    }
+                    .background(Theme.panel2).foregroundStyle(Theme.text)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
                     Button(hr.isDemo ? "Stop demo" : "Demo mode (simulated HR)") { hr.toggleDemo() }
                         .font(.footnote).foregroundStyle(Theme.muted)
                         .padding(.top, 4)
@@ -49,6 +59,9 @@ struct TrainView: View {
             .onChange(of: engine.justFinished) { s in if s != nil { showSummary = true } }
             .sheet(isPresented: $showSummary) {
                 if let s = engine.justFinished { SummarySheet(session: s) }
+            }
+            .fullScreenCover(isPresented: $showRecord) {
+                RecordView().environmentObject(hr).environmentObject(store)
             }
         }
     }
