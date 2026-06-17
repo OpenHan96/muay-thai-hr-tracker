@@ -2,9 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0d0f14">
 <title>Fight HR Tracker</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fight HR">
 <style>
   :root {
     --bg: #0d0f14;
@@ -31,6 +38,9 @@
   header {
     display: flex; align-items: center; justify-content: space-between;
     padding: 12px 16px; background: var(--panel); border-bottom: 1px solid #232a3a;
+    padding-top: calc(12px + env(safe-area-inset-top));
+    padding-left: calc(16px + env(safe-area-inset-left));
+    padding-right: calc(16px + env(safe-area-inset-right));
   }
   header h1 { font-size: 16px; font-weight: 700; letter-spacing: 0.5px; }
   header h1 span { color: var(--accent); }
@@ -42,6 +52,8 @@
     display: flex; background: var(--panel); border-top: 1px solid #232a3a;
     position: sticky; bottom: 0; z-index: 10;
     padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
   }
   nav button {
     flex: 1; padding: 12px 0 10px; background: none; border: none; color: var(--muted);
@@ -147,6 +159,10 @@
 
   .banner { background: #3a2b12; border: 1px solid #7a5a1e; color: #f2d49b; border-radius: 12px; padding: 12px; font-size: 13px; margin-bottom: 12px; line-height: 1.45; display: none; }
   .banner.show { display: block; }
+  .banner.info { background: #122433; border-color: #1e5a7a; color: #9bd2f2; }
+  .banner .bRow { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .banner .bBtn { padding: 9px 14px; border: none; border-radius: 9px; font-size: 13px; font-weight: 700; cursor: pointer; color: #fff; background: #2563eb; text-decoration: none; display: inline-block; }
+  .banner .bBtn.ghost { background: transparent; border: 1px solid currentColor; color: inherit; }
   .muted { color: var(--muted); font-size: 12px; }
   .danger { color: var(--accent); }
   .center { text-align: center; }
@@ -162,10 +178,23 @@
 <main>
   <!-- ============ TRAIN TAB ============ -->
   <section id="tab-train" class="tab active">
+    <div id="installBanner" class="banner info">
+      <b>Add to your Home Screen</b> for one-tap, full-screen access.
+      <div class="bRow" id="installRow"></div>
+    </div>
+
     <div id="iosBanner" class="banner">
-      <b>Bluetooth not available in this browser.</b><br>
-      On iPhone/iPad, open this page in the free <b>Bluefy</b> browser (App Store) — iOS Safari blocks Web Bluetooth.
-      On Android/desktop use Chrome or Edge. You can still try Demo mode below.
+      <b>Live heart rate needs the Bluefy browser.</b><br>
+      iPhone Safari can't read Bluetooth monitors. Open this page in the free <b>Bluefy</b> browser to connect your COROS. You can still use timers, history and Demo mode here.
+      <div class="bRow">
+        <a class="bBtn" id="bluefyBtn" href="#">Open in Bluefy</a>
+        <a class="bBtn ghost" id="bluefyStore" href="https://apps.apple.com/app/bluefy-web-ble-browser/id1492822055" target="_blank" rel="noopener">Get Bluefy (App Store)</a>
+      </div>
+    </div>
+
+    <div id="btHelpBanner" class="banner info">
+      <b>Heart rate needs Chrome or Edge.</b><br>
+      This browser doesn't support Web Bluetooth. Open the page in Chrome or Edge to connect your monitor, or try Demo mode below.
     </div>
 
     <div class="card" style="padding:8px">
@@ -426,7 +455,7 @@ function kcalPerMin(hr) {
 const btSupported = !!(navigator.bluetooth && navigator.bluetooth.requestDevice);
 
 async function connect() {
-  if (!btSupported) { $("#iosBanner").classList.add("show"); return; }
+  if (!btSupported) { setupBtBanner(); return; }
   try {
     setBt("Searching…", false);
     S.device = await navigator.bluetooth.requestDevice({
@@ -1020,9 +1049,63 @@ document.addEventListener("visibilitychange", async () => {
   }
 });
 
-if (!btSupported) {
-  $("#iosBanner").classList.add("show");
+/* ================= PWA: platform detection, banners, install ================= */
+
+const ua = navigator.userAgent || "";
+const isIOS = /iPad|iPhone|iPod/.test(ua) ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); // iPadOS reports as Mac
+const isBluefy = /Bluefy/i.test(ua);
+const isStandalone = window.matchMedia("(display-mode: standalone)").matches ||
+  window.navigator.standalone === true;
+
+function setupBtBanner() {
+  if (btSupported) return; // Bluefy on iOS, or Chrome/Edge elsewhere — Connect works.
   $("#connectBtn").disabled = true;
+  if (isIOS) {
+    // Deep-link the current page into Bluefy. Falls back to the App Store link beside it.
+    $("#bluefyBtn").href = "bluefy://open?url=" + encodeURIComponent(location.href);
+    $("#iosBanner").classList.add("show");
+  } else {
+    $("#btHelpBanner").classList.add("show");
+  }
+}
+
+function setupInstallBanner() {
+  if (isStandalone) return; // already installed — no need to nag.
+  const row = $("#installRow");
+  const banner = $("#installBanner");
+
+  // Android / desktop Chrome: real install prompt.
+  let deferred = null;
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferred = e;
+    row.innerHTML = "";
+    const add = document.createElement("button");
+    add.className = "bBtn"; add.textContent = "Install app";
+    add.addEventListener("click", async () => { deferred.prompt(); await deferred.userChoice; banner.classList.remove("show"); });
+    const no = document.createElement("button");
+    no.className = "bBtn ghost"; no.textContent = "Not now";
+    no.addEventListener("click", () => banner.classList.remove("show"));
+    row.append(add, no);
+    banner.classList.add("show");
+  });
+
+  // iOS Safari: no prompt event — show the manual Share → Add to Home Screen hint.
+  if (isIOS && !isBluefy) {
+    banner.innerHTML = '<b>Add to your Home Screen:</b> tap the Share button ' +
+      '<span aria-hidden="true">⬆️</span> then <b>“Add to Home Screen.”</b>';
+    banner.classList.add("show");
+  }
+}
+
+setupBtBanner();
+setupInstallBanner();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
 }
 
 initSettings();
