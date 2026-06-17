@@ -36,7 +36,10 @@ final class SessionEngine: ObservableObject {
 
     private unowned let store: Store
     private unowned let hr: HeartRateMonitor
-    init(store: Store, hr: HeartRateMonitor) { self.store = store; self.hr = hr }
+    private unowned let loc: LocationTracker
+    init(store: Store, hr: HeartRateMonitor, loc: LocationTracker) {
+        self.store = store; self.hr = hr; self.loc = loc
+    }
 
     private var cfg: TimerConfig { store.timerCfg }
 
@@ -52,6 +55,7 @@ final class SessionEngine: ObservableObject {
         } else {
             phase = .session; phaseLeft = 0; cur = nil
         }
+        if store.activity.usesGPS { loc.start() }
         UIApplication.shared.isIdleTimerDisabled = true
         timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
             .sink { [weak self] _ in self?.tick() }
@@ -64,6 +68,10 @@ final class SessionEngine: ObservableObject {
         running = false
         timer?.cancel(); timer = nil
         UIApplication.shared.isIdleTimerDisabled = false
+        let wasGPS = store.activity.usesGPS
+        let dist = loc.distanceMeters
+        let path = loc.route
+        if wasGPS { loc.stop() }
         // include in-progress round if it has data
         if let c = cur, (phase == .work || phase == .session), c.count > 5 {
             liveRounds.append(roundStat(c))
@@ -75,7 +83,9 @@ final class SessionEngine: ObservableObject {
             avg: Int((hrSum / hrCount).rounded()), max: hrMax,
             zoneSec: zoneSec.map { Int($0.rounded()) },
             mode: cfg.mode, activity: store.activity, rounds: liveRounds,
-            samples: compress(samples))
+            samples: compress(samples),
+            distanceMeters: wasGPS ? dist : nil,
+            route: wasGPS && !path.isEmpty ? path.map { [$0.latitude, $0.longitude] } : nil)
         store.add(s)
         justFinished = s
         phase = .idle

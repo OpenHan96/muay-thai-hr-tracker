@@ -7,6 +7,16 @@ func fmtTime(_ seconds: Double) -> String {
     return h > 0 ? String(format: "%d:%02d:%02d", h, m, sec) : String(format: "%d:%02d", m, sec)
 }
 
+/// Distance in km with two decimals, e.g. "3.42".
+func fmtKm(_ meters: Double) -> String { String(format: "%.2f", meters / 1000) }
+
+/// Pace as m:ss per km, e.g. "5:30". 0 = unknown.
+func fmtPace(_ secPerKm: Double) -> String {
+    guard secPerKm > 0, secPerKm.isFinite else { return "--" }
+    let s = Int(secPerKm.rounded())
+    return String(format: "%d:%02d", s / 60, s % 60)
+}
+
 /// Horizontal time-in-zones bars. Mirrors renderZoneBars.
 struct ZoneBars: View {
     let zoneSec: [Double]

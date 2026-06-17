@@ -23,4 +23,6 @@ struct Session: Codable, Identifiable, Equatable {
     var activity: Activity
     var rounds: [RoundStat]
     var samples: [[Int]]            // [secOffset, hr], ~1 per 5s
+    var distanceMeters: Double?     // running only
+    var route: [[Double]]?          // running only: [lat, lon] pairs
 }

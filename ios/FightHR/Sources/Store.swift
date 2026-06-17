@@ -60,14 +60,15 @@ final class Store: ObservableObject {
 
     // MARK: CSV export — same columns as exportCsv() in index.html
     func csv() -> String {
-        var out = "date,time,activity,duration_sec,kcal,avg_hr,max_hr,z1_sec,z2_sec,z3_sec,z4_sec,z5_sec,mode,rounds\n"
+        var out = "date,time,activity,duration_sec,kcal,avg_hr,max_hr,z1_sec,z2_sec,z3_sec,z4_sec,z5_sec,mode,rounds,distance_m\n"
         let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
         let tf = DateFormatter(); tf.dateFormat = "HH:mm"
         for s in sessions {
             let zones = s.zoneSec.map(String.init).joined(separator: ",")
+            let dist = s.distanceMeters.map { String(Int($0.rounded())) } ?? ""
             out += [df.string(from: s.ts), tf.string(from: s.ts), s.activity.rawValue,
                     "\(s.durSec)", "\(s.kcal)", "\(s.avg)", "\(s.max)", zones,
-                    s.mode.rawValue, "\(s.rounds.count)"].joined(separator: ",") + "\n"
+                    s.mode.rawValue, "\(s.rounds.count)", dist].joined(separator: ",") + "\n"
         }
         return out
     }

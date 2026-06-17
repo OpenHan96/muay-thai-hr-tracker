@@ -4,6 +4,7 @@ struct TrainView: View {
     @EnvironmentObject var store: Store
     @EnvironmentObject var hr: HeartRateMonitor
     @EnvironmentObject var engine: SessionEngine
+    @EnvironmentObject var loc: LocationTracker
     @State private var showSummary = false
     @State private var beat = false
 
@@ -134,10 +135,17 @@ struct TrainView: View {
 
     private var statGrid: some View {
         HStack(spacing: 8) {
-            StatCell(value: "\(Int(engine.calories.rounded()))", label: "kcal")
-            StatCell(value: engine.hrCount > 0 ? "\(Int((engine.hrSum / engine.hrCount).rounded()))" : "--", label: "avg hr")
-            StatCell(value: engine.hrMax > 0 ? "\(engine.hrMax)" : "--", label: "max hr")
-            StatCell(value: hr.bpm > 0 ? "\(Int(Double(hr.bpm) / Double(Zones.maxHr(store.profile)) * 100))%" : "--", label: "% max")
+            if store.activity.usesGPS {
+                StatCell(value: fmtKm(loc.distanceMeters), label: "km")
+                StatCell(value: fmtPace(loc.paceSecPerKm), label: "pace /km")
+                StatCell(value: "\(Int(engine.calories.rounded()))", label: "kcal")
+                StatCell(value: engine.hrCount > 0 ? "\(Int((engine.hrSum / engine.hrCount).rounded()))" : "--", label: "avg hr")
+            } else {
+                StatCell(value: "\(Int(engine.calories.rounded()))", label: "kcal")
+                StatCell(value: engine.hrCount > 0 ? "\(Int((engine.hrSum / engine.hrCount).rounded()))" : "--", label: "avg hr")
+                StatCell(value: engine.hrMax > 0 ? "\(engine.hrMax)" : "--", label: "max hr")
+                StatCell(value: hr.bpm > 0 ? "\(Int(Double(hr.bpm) / Double(Zones.maxHr(store.profile)) * 100))%" : "--", label: "% max")
+            }
         }
     }
 

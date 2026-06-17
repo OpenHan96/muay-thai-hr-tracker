@@ -14,6 +14,7 @@
 		606BE0D07901060DB608E106 /* FightHRApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 660A7069DF7A5CEDE8425AA8 /* FightHRApp.swift */; };
 		56203B2286259737FDA0963A /* HeartRateMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C937B15EA731019C0A8D3A27 /* HeartRateMonitor.swift */; };
 		9676FAE99AA98ACDC7DBFB1D /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1860E117A76F489E2DFF400 /* HistoryView.swift */; };
+		06F351CD86A0C37236227EA6 /* LocationTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 536FB6A2FD2B1230CDB27126 /* LocationTracker.swift */; };
 		D3717F9EC010F6F87A0902E9 /* Profile.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC4D7D52694210D3AB1EBADE /* Profile.swift */; };
 		FBE6DBF0009D1B4EBD448FC0 /* Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1039290E872B7D359AE57379 /* Session.swift */; };
 		846A3514733DE8DBC7788DBE /* SessionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1409A3132B57DD416727797B /* SessionEngine.swift */; };
@@ -34,6 +35,7 @@
 		660A7069DF7A5CEDE8425AA8 /* FightHRApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FightHRApp.swift; sourceTree = "<group>"; };
 		C937B15EA731019C0A8D3A27 /* HeartRateMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateMonitor.swift; sourceTree = "<group>"; };
 		F1860E117A76F489E2DFF400 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		536FB6A2FD2B1230CDB27126 /* LocationTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationTracker.swift; sourceTree = "<group>"; };
 		BC4D7D52694210D3AB1EBADE /* Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Profile.swift; sourceTree = "<group>"; };
 		1039290E872B7D359AE57379 /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
 		1409A3132B57DD416727797B /* SessionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionEngine.swift; sourceTree = "<group>"; };
@@ -87,6 +89,7 @@
 				660A7069DF7A5CEDE8425AA8 /* FightHRApp.swift */,
 				C937B15EA731019C0A8D3A27 /* HeartRateMonitor.swift */,
 				F1860E117A76F489E2DFF400 /* HistoryView.swift */,
+				536FB6A2FD2B1230CDB27126 /* LocationTracker.swift */,
 				BC4D7D52694210D3AB1EBADE /* Profile.swift */,
 				1039290E872B7D359AE57379 /* Session.swift */,
 				1409A3132B57DD416727797B /* SessionEngine.swift */,
@@ -184,6 +187,7 @@
 				606BE0D07901060DB608E106 /* FightHRApp.swift in Sources */,
 				56203B2286259737FDA0963A /* HeartRateMonitor.swift in Sources */,
 				9676FAE99AA98ACDC7DBFB1D /* HistoryView.swift in Sources */,
+				06F351CD86A0C37236227EA6 /* LocationTracker.swift in Sources */,
 				D3717F9EC010F6F87A0902E9 /* Profile.swift in Sources */,
 				FBE6DBF0009D1B4EBD448FC0 /* Session.swift in Sources */,
 				846A3514733DE8DBC7788DBE /* SessionEngine.swift in Sources */,

@@ -24,6 +24,8 @@
     <string>Fight HR</string>
     <key>NSBluetoothAlwaysUsageDescription</key>
     <string>Fight HR connects to your Bluetooth heart rate monitor to show live heart rate, zones and calories during training.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Fight HR uses your location during running sessions to track distance, pace and route.</string>
     <key>UILaunchScreen</key>
     <dict>
         <key>UIColorName</key>
