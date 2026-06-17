@@ -16,14 +16,12 @@ struct RecordView: View {
             VStack {
                 // live overlay preview (matches what gets burned in)
                 HStack {
-                    if hr.bpm > 0 {
-                        Text("\(hr.bpm) BPM   \(zone < 0 ? "—" : Theme.zoneNames[zone])")
-                            .font(.system(size: 22, weight: .heavy))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 12).padding(.vertical, 8)
-                            .background(.black.opacity(0.35))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
+                    Text("\(hr.bpm > 0 ? "\(hr.bpm)" : "--") BPM   \(hr.bpm > 0 && zone >= 0 ? Theme.zoneNames[zone] : "—")")
+                        .font(.system(size: 22, weight: .heavy))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(.black.opacity(0.35))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                     Spacer()
                 }
                 .padding()

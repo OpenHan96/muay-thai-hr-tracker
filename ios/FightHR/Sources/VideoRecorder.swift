@@ -63,38 +63,47 @@ final class VideoRecorder: NSObject, ObservableObject,
     func stopSession() { queue.async { if self.session.isRunning { self.session.stopRunning() } } }
 
     // MARK: record
+    private var pendingStart = false
     func toggle() { isRecording ? finish() : start() }
 
     private func start() {
         queue.async { [weak self] in
             guard let self else { return }
-            let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("fighthr-\(Int(Date().timeIntervalSince1970)).mov")
-            try? FileManager.default.removeItem(at: url)
-            guard let w = try? AVAssetWriter(outputURL: url, fileType: .mov) else { return }
-            let vSettings: [String: Any] = [
-                AVVideoCodecKey: AVVideoCodecType.h264,
-                AVVideoWidthKey: 1080, AVVideoHeightKey: 1920,
-            ]
-            let vIn = AVAssetWriterInput(mediaType: .video, outputSettings: vSettings)
-            vIn.expectsMediaDataInRealTime = true
-            let aSettings: [String: Any] = [
-                AVFormatIDKey: kAudioFormatMPEG4AAC, AVNumberOfChannelsKey: 1, AVSampleRateKey: 44100,
-            ]
-            let aIn = AVAssetWriterInput(mediaType: .audio, outputSettings: aSettings)
-            aIn.expectsMediaDataInRealTime = true
-            if w.canAdd(vIn) { w.add(vIn) }
-            if w.canAdd(aIn) { w.add(aIn) }
-            let attrs: [String: Any] = [
-                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-                kCVPixelBufferWidthKey as String: 1080,
-                kCVPixelBufferHeightKey as String: 1920,
-            ]
-            self.adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: vIn, sourcePixelBufferAttributes: attrs)
-            self.writer = w; self.videoIn = vIn; self.audioIn = aIn
-            self.fileURL = url; self.startPTS = .invalid
-            DispatchQueue.main.async { self.isRecording = true; self.elapsed = 0 }
+            // Writer is built lazily on the first frame so it matches the real
+            // capture dimensions (avoids cropping / off-screen overlay).
+            self.writer = nil; self.videoIn = nil; self.audioIn = nil
+            self.adaptor = nil; self.startPTS = .invalid
+            self.pendingStart = true
+            DispatchQueue.main.async { self.isRecording = true; self.elapsed = 0; self.savedMessage = nil }
         }
+    }
+
+    /// Build the writer sized to the actual frame (called on first video buffer).
+    private func setupWriter(width: Int, height: Int) {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fighthr-\(Int(Date().timeIntervalSince1970)).mov")
+        try? FileManager.default.removeItem(at: url)
+        guard let w = try? AVAssetWriter(outputURL: url, fileType: .mov) else { return }
+        let vSettings: [String: Any] = [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: width, AVVideoHeightKey: height,
+        ]
+        let vIn = AVAssetWriterInput(mediaType: .video, outputSettings: vSettings)
+        vIn.expectsMediaDataInRealTime = true
+        let aSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC, AVNumberOfChannelsKey: 1, AVSampleRateKey: 44100,
+        ]
+        let aIn = AVAssetWriterInput(mediaType: .audio, outputSettings: aSettings)
+        aIn.expectsMediaDataInRealTime = true
+        if w.canAdd(vIn) { w.add(vIn) }
+        if w.canAdd(aIn) { w.add(aIn) }
+        let attrs: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey as String: width,
+            kCVPixelBufferHeightKey as String: height,
+        ]
+        self.adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: vIn, sourcePixelBufferAttributes: attrs)
+        self.writer = w; self.videoIn = vIn; self.audioIn = aIn; self.fileURL = url
     }
 
     private func finish() {
@@ -127,7 +136,14 @@ final class VideoRecorder: NSObject, ObservableObject,
     // MARK: capture delegate
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
-        guard isRecording, let w = writer else { return }
+        guard isRecording else { return }
+        // Build the writer on the first video frame, sized to that frame.
+        if pendingStart {
+            guard output == videoOut, let px = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+            setupWriter(width: CVPixelBufferGetWidth(px), height: CVPixelBufferGetHeight(px))
+            pendingStart = false
+        }
+        guard let w = writer else { return }
         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         if startPTS == .invalid {
             startPTS = pts
@@ -154,17 +170,17 @@ final class VideoRecorder: NSObject, ObservableObject,
         adaptor.append(dst, withPresentationTime: pts)
     }
 
-    /// Burn big BPM + zone name into the frame.
+    /// Burn big BPM + zone name into the frame. Always draws (shows "--" with no HR).
     private func overlay(on base: CIImage) -> CIImage {
         let (bpm, zone) = overlayProvider()
-        guard bpm > 0 else { return base }
-        let zoneName = zone < 0 ? "—" : Theme.zoneNames[zone]
-        let text = "\(bpm) BPM   \(zoneName)"
+        let bpmText = bpm > 0 ? "\(bpm)" : "--"
+        let zoneName = (bpm <= 0 || zone < 0) ? "—" : Theme.zoneNames[zone]
+        let text = "\(bpmText) BPM   \(zoneName)"
         let extent = base.extent
         let label = makeLabel(text, maxWidth: extent.width)
-        // position near top-left with padding
+        // top-left with padding, in the base frame's coordinate space
         let tx = extent.minX + 40
-        let ty = extent.maxY - label.extent.height - 60
+        let ty = extent.maxY - label.extent.height - 40
         let placed = label.transformed(by: CGAffineTransform(translationX: tx, y: ty))
         return placed.composited(over: base)
     }
