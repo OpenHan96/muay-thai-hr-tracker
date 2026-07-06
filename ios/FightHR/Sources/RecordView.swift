@@ -4,6 +4,7 @@ import AVFoundation
 struct RecordView: View {
     @EnvironmentObject var hr: HeartRateMonitor
     @EnvironmentObject var store: Store
+    @EnvironmentObject var engine: SessionEngine
     @Environment(\.dismiss) private var dismiss
     @StateObject private var rec = VideoRecorder()
 
@@ -26,6 +27,26 @@ struct RecordView: View {
                 }
                 .padding()
 
+                // HR connection status — tap to (re)connect without leaving the camera
+                HStack {
+                    Button {
+                        if !hr.status.isLive { hr.connect() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Circle().fill(hr.status.isLive ? Theme.good : Color.gray)
+                                .frame(width: 8, height: 8)
+                            Text(hr.status.isLive ? hr.status.label : "\(hr.status.label) — tap to connect")
+                                .font(.caption).bold()
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(.black.opacity(0.35))
+                        .clipShape(Capsule())
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal)
+
                 Spacer()
 
                 if let msg = rec.savedMessage {
@@ -34,8 +55,15 @@ struct RecordView: View {
                 }
 
                 HStack {
-                    Button("Close") { rec.stopSession(); dismiss() }
-                        .foregroundStyle(.white).padding()
+                    Button(rec.isRecording ? "Stop" : "Close") {
+                        if rec.isRecording {
+                            rec.finish()          // save first; user closes after seeing the message
+                        } else {
+                            rec.stopSession()
+                            dismiss()
+                        }
+                    }
+                    .foregroundStyle(.white).padding()
                     Spacer()
                     if rec.isRecording {
                         Text(fmtTime(rec.elapsed)).foregroundStyle(.white).monospacedDigit().bold()
@@ -58,10 +86,18 @@ struct RecordView: View {
         }
         .background(.black)
         .onAppear {
+            // Keep the screen awake — auto-lock kills the camera session and
+            // was silently ending recordings.
+            UIApplication.shared.isIdleTimerDisabled = true
             rec.overlayProvider = { (hr.bpm, Zones.zoneOf(hr.bpm, store.profile)) }
+            if !hr.status.isLive { hr.connect() }
             requestCameraThenConfigure()
         }
-        .onDisappear { rec.stopSession() }
+        .onDisappear {
+            // A running training session still wants the screen awake.
+            UIApplication.shared.isIdleTimerDisabled = engine.running
+            rec.stopSession()
+        }
     }
 
     private func requestCameraThenConfigure() {

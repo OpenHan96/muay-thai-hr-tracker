@@ -61,7 +61,7 @@ struct TrainView: View {
                 if let s = engine.justFinished { SummarySheet(session: s) }
             }
             .fullScreenCover(isPresented: $showRecord) {
-                RecordView().environmentObject(hr).environmentObject(store)
+                RecordView().environmentObject(hr).environmentObject(store).environmentObject(engine)
             }
         }
     }

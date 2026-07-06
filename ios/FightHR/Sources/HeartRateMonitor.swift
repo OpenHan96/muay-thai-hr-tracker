@@ -44,12 +44,28 @@ final class HeartRateMonitor: NSObject, ObservableObject, CBCentralManagerDelega
 
     var isDemo: Bool { status == .demo }
 
+    private let lastDeviceKey = "fighthr.lastHRDevice"
+    private var wantsScan = false
+
     // MARK: connect
     func connect() {
         stopDemo()
-        guard central.state == .poweredOn else { status = .disconnected; return }
+        if let p = peripheral { central.cancelPeripheralConnection(p); peripheral = nil }
+        guard central.state == .poweredOn else { wantsScan = true; status = .searching; return }
         status = .searching
         central.scanForPeripherals(withServices: [hrService])
+    }
+
+    /// Silently reconnect to the last strap on launch, so HR is live without
+    /// tapping Connect first (the connect stays pending until the strap is on).
+    private func autoReconnect() {
+        guard let saved = UserDefaults.standard.string(forKey: lastDeviceKey),
+              let id = UUID(uuidString: saved),
+              let p = central.retrievePeripherals(withIdentifiers: [id]).first else { return }
+        peripheral = p
+        p.delegate = self
+        status = .connecting
+        central.connect(p)
     }
 
     func disconnect() {
@@ -84,7 +100,17 @@ final class HeartRateMonitor: NSObject, ObservableObject, CBCentralManagerDelega
 
     // MARK: CBCentralManagerDelegate
     func centralManagerDidUpdateState(_ c: CBCentralManager) {
-        if c.state != .poweredOn, status != .demo { status = .disconnected }
+        if c.state == .poweredOn {
+            if wantsScan {
+                wantsScan = false
+                status = .searching
+                c.scanForPeripherals(withServices: [hrService])
+            } else if status == .idle {
+                autoReconnect()
+            }
+        } else if status != .demo {
+            status = .disconnected
+        }
     }
 
     func centralManager(_ c: CBCentralManager, didDiscover p: CBPeripheral,
@@ -97,7 +123,13 @@ final class HeartRateMonitor: NSObject, ObservableObject, CBCentralManagerDelega
     }
 
     func centralManager(_ c: CBCentralManager, didConnect p: CBPeripheral) {
+        UserDefaults.standard.set(p.identifier.uuidString, forKey: lastDeviceKey)
         p.discoverServices([hrService, batteryService])
+    }
+
+    func centralManager(_ c: CBCentralManager, didFailToConnect p: CBPeripheral, error: Error?) {
+        guard status != .demo else { return }
+        status = .disconnected
     }
 
     func centralManager(_ c: CBCentralManager, didDisconnectPeripheral p: CBPeripheral, error: Error?) {

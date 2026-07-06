@@ -26,9 +26,40 @@ final class VideoRecorder: NSObject, ObservableObject,
     private var adaptor: AVAssetWriterInputPixelBufferAdaptor?
     private var startPTS: CMTime = .invalid
     private var fileURL: URL?
+    // Recording state used on the capture queue; isRecording mirrors it for UI.
+    private var active = false
+    private var pendingStart = false
+    private var lastElapsedWhole = -1
+    private var observers: [NSObjectProtocol] = []
 
     /// Pulled each frame to draw the overlay. Set by the view from live HR.
     var overlayProvider: () -> (bpm: Int, zone: Int) = { (0, -1) }
+
+    override init() {
+        super.init()
+        // Screen lock, phone call, app switch, camera grabbed by another app:
+        // finish and save the recording instead of abandoning the file.
+        let nc = NotificationCenter.default
+        observers.append(nc.addObserver(forName: UIApplication.willResignActiveNotification,
+                                        object: nil, queue: .main) { [weak self] _ in
+            self?.finish(note: "Interrupted — video saved")
+        })
+        observers.append(nc.addObserver(forName: AVCaptureSession.wasInterruptedNotification,
+                                        object: session, queue: .main) { [weak self] _ in
+            self?.finish(note: "Camera interrupted — video saved")
+        })
+        observers.append(nc.addObserver(forName: AVCaptureSession.runtimeErrorNotification,
+                                        object: session, queue: .main) { [weak self] _ in
+            self?.finish(note: "Camera error — video saved")
+        })
+        observers.append(nc.addObserver(forName: AVCaptureSession.interruptionEndedNotification,
+                                        object: session, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            self.queue.async { if !self.session.isRunning { self.session.startRunning() } }
+        })
+    }
+
+    deinit { observers.forEach { NotificationCenter.default.removeObserver($0) } }
 
     // MARK: setup
     func configure() {
@@ -60,21 +91,68 @@ final class VideoRecorder: NSObject, ObservableObject,
         }
     }
 
-    func stopSession() { queue.async { if self.session.isRunning { self.session.stopRunning() } } }
+    /// Stops the camera. If a recording is in flight it is finished and saved
+    /// first — the writer is kept alive by its completion handler, so the file
+    /// lands in Photos even if this object is deallocated right after.
+    func stopSession() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.finishOnQueue(note: nil)
+            if self.session.isRunning { self.session.stopRunning() }
+        }
+    }
 
     // MARK: record
-    private var pendingStart = false
     func toggle() { isRecording ? finish() : start() }
 
     private func start() {
         queue.async { [weak self] in
-            guard let self else { return }
+            guard let self, !self.active else { return }
             // Writer is built lazily on the first frame so it matches the real
             // capture dimensions (avoids cropping / off-screen overlay).
             self.writer = nil; self.videoIn = nil; self.audioIn = nil
             self.adaptor = nil; self.startPTS = .invalid
+            self.lastElapsedWhole = -1
+            self.active = true
             self.pendingStart = true
             DispatchQueue.main.async { self.isRecording = true; self.elapsed = 0; self.savedMessage = nil }
+        }
+    }
+
+    func finish(note: String? = nil) {
+        queue.async { [weak self] in self?.finishOnQueue(note: note) }
+    }
+
+    private func finishOnQueue(note: String?) {
+        guard active else { return }
+        active = false
+        pendingStart = false
+        DispatchQueue.main.async { self.isRecording = false }
+        defer {
+            writer = nil; videoIn = nil; audioIn = nil
+            adaptor = nil; startPTS = .invalid; fileURL = nil
+        }
+        guard let w = writer, let url = fileURL, w.status == .writing else {
+            let reason = writer?.error?.localizedDescription ?? "no video frames captured"
+            DispatchQueue.main.async { self.savedMessage = "Recording failed (\(reason))" }
+            return
+        }
+        videoIn?.markAsFinished(); audioIn?.markAsFinished()
+        // The closure holds `w` and `url` strongly: writing + saving complete
+        // even if the view (and this recorder) are dismissed meanwhile.
+        w.finishWriting { [weak self] in
+            if w.status == .completed {
+                VideoRecorder.saveToPhotos(url) { ok, denied in
+                    DispatchQueue.main.async {
+                        self?.savedMessage = ok ? (note ?? "Saved to Photos ✓")
+                            : denied ? "Allow Photos access in Settings to save videos"
+                            : "Save to Photos failed"
+                    }
+                }
+            } else {
+                let reason = w.error?.localizedDescription ?? "unknown error"
+                DispatchQueue.main.async { self?.savedMessage = "Recording failed (\(reason))" }
+            }
         }
     }
 
@@ -106,29 +184,14 @@ final class VideoRecorder: NSObject, ObservableObject,
         self.writer = w; self.videoIn = vIn; self.audioIn = aIn; self.fileURL = url
     }
 
-    private func finish() {
-        queue.async { [weak self] in
-            guard let self, let w = self.writer else { return }
-            self.videoIn?.markAsFinished(); self.audioIn?.markAsFinished()
-            w.finishWriting { [weak self] in
-                guard let self, let url = self.fileURL else { return }
-                if w.status == .completed { self.saveToPhotos(url) }
-                self.writer = nil; self.videoIn = nil; self.audioIn = nil
-                DispatchQueue.main.async { self.isRecording = false }
-            }
-        }
-    }
-
-    private func saveToPhotos(_ url: URL) {
+    private static func saveToPhotos(_ url: URL, done: @escaping (_ ok: Bool, _ denied: Bool) -> Void) {
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
-            guard status == .authorized || status == .limited else {
-                DispatchQueue.main.async { self.savedMessage = "Saved to app (Photos access denied)" }
-                return
-            }
+            guard status == .authorized || status == .limited else { done(false, true); return }
             PHPhotoLibrary.shared().performChanges {
                 PHAssetCreationRequest.creationRequestForAssetFromVideo(atFileURL: url)
             } completionHandler: { ok, _ in
-                DispatchQueue.main.async { self.savedMessage = ok ? "Saved to Photos ✓" : "Save failed" }
+                if ok { try? FileManager.default.removeItem(at: url) }
+                done(ok, false)
             }
         }
     }
@@ -136,7 +199,7 @@ final class VideoRecorder: NSObject, ObservableObject,
     // MARK: capture delegate
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
-        guard isRecording else { return }
+        guard active else { return }
         // Build the writer on the first video frame, sized to that frame.
         if pendingStart {
             guard output == videoOut, let px = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
@@ -146,15 +209,32 @@ final class VideoRecorder: NSObject, ObservableObject,
         guard let w = writer else { return }
         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         if startPTS == .invalid {
+            guard output == videoOut else { return }   // start the timeline on a video frame
+            guard w.startWriting() else {
+                let reason = w.error?.localizedDescription ?? "writer error"
+                active = false
+                writer = nil; videoIn = nil; audioIn = nil; adaptor = nil
+                DispatchQueue.main.async {
+                    self.isRecording = false
+                    self.savedMessage = "Recording failed (\(reason))"
+                }
+                return
+            }
+            w.startSession(atSourceTime: pts)
             startPTS = pts
-            w.startWriting(); w.startSession(atSourceTime: pts)
         }
         if output == videoOut {
             appendVideo(sampleBuffer, pts: pts)
-            DispatchQueue.main.async { self.elapsed = CMTimeGetSeconds(pts - self.startPTS) }
+            let secs = CMTimeGetSeconds(pts - startPTS)
+            let whole = Int(secs)
+            if whole != lastElapsedWhole {   // one UI update per second, not per frame
+                lastElapsedWhole = whole
+                DispatchQueue.main.async { self.elapsed = secs }
+            }
         } else if output == audioOut, let aIn = audioIn, aIn.isReadyForMoreMediaData {
             aIn.append(sampleBuffer)
         }
+        if w.status == .failed { finishOnQueue(note: nil) }   // disk full etc. — surface it
     }
 
     private func appendVideo(_ sb: CMSampleBuffer, pts: CMTime) {
@@ -170,22 +250,30 @@ final class VideoRecorder: NSObject, ObservableObject,
         adaptor.append(dst, withPresentationTime: pts)
     }
 
-    /// Burn big BPM + zone name into the frame. Always draws (shows "--" with no HR).
+    // MARK: overlay
+    private var cachedText = ""
+    private var cachedLabel = CIImage.empty()
+
+    /// Burn big BPM + zone name into the frame. Always draws (shows "--" with
+    /// no HR). The label bitmap is re-rendered only when the text changes.
     private func overlay(on base: CIImage) -> CIImage {
         let (bpm, zone) = overlayProvider()
         let bpmText = bpm > 0 ? "\(bpm)" : "--"
         let zoneName = (bpm <= 0 || zone < 0) ? "—" : Theme.zoneNames[zone]
         let text = "\(bpmText) BPM   \(zoneName)"
+        if text != cachedText {
+            cachedText = text
+            cachedLabel = makeLabel(text)
+        }
         let extent = base.extent
-        let label = makeLabel(text, maxWidth: extent.width)
         // top-left with padding, in the base frame's coordinate space
         let tx = extent.minX + 40
-        let ty = extent.maxY - label.extent.height - 40
-        let placed = label.transformed(by: CGAffineTransform(translationX: tx, y: ty))
+        let ty = extent.maxY - cachedLabel.extent.height - 40
+        let placed = cachedLabel.transformed(by: CGAffineTransform(translationX: tx, y: ty))
         return placed.composited(over: base)
     }
 
-    private func makeLabel(_ text: String, maxWidth: CGFloat) -> CIImage {
+    private func makeLabel(_ text: String) -> CIImage {
         let font = UIFont.systemFont(ofSize: 72, weight: .heavy)
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font, .foregroundColor: UIColor.white,
