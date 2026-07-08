@@ -69,9 +69,24 @@ final class HeartRateMonitor: NSObject, ObservableObject, CBCentralManagerDelega
     }
 
     func disconnect() {
+        watchdog?.invalidate(); watchdog = nil
         if let p = peripheral { central.cancelPeripheralConnection(p) }
         peripheral = nil
         status = .idle
+    }
+
+    /// If the strap goes silent while "connected" (BLE stack wedged, armband
+    /// dozed off), force a reconnect instead of freezing on a stale number.
+    private var watchdog: Timer?
+    private func startWatchdog() {
+        watchdog?.invalidate()
+        watchdog = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            guard let self, case .connected = self.status else { return }
+            if Date().timeIntervalSince(self.lastBeat) > 12, let p = self.peripheral {
+                self.status = .reconnecting
+                self.central.cancelPeripheralConnection(p)   // didDisconnect → auto-reconnect
+            }
+        }
     }
 
     // MARK: demo
@@ -150,7 +165,9 @@ final class HeartRateMonitor: NSObject, ObservableObject, CBCentralManagerDelega
         for ch in s.characteristics ?? [] {
             if ch.uuid == hrMeasurement {
                 p.setNotifyValue(true, for: ch)
+                lastBeat = Date()   // seed freshness so the watchdog waits for real data
                 status = .connected(p.name ?? "HR monitor")
+                startWatchdog()
             }
             if ch.uuid == batteryLevel { p.readValue(for: ch) }
         }

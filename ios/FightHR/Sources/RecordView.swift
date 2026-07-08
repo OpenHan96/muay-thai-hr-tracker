@@ -9,6 +9,7 @@ struct RecordView: View {
     @StateObject private var rec = VideoRecorder()
 
     private var zone: Int { Zones.zoneOf(hr.bpm, store.profile) }
+    private var liveHR: Bool { hr.bpm > 0 && hr.isFresh }
 
     var body: some View {
         ZStack {
@@ -17,12 +18,7 @@ struct RecordView: View {
             VStack {
                 // live overlay preview (matches what gets burned in)
                 HStack {
-                    Text("\(hr.bpm > 0 ? "\(hr.bpm)" : "--") BPM   \(hr.bpm > 0 && zone >= 0 ? Theme.zoneNames[zone] : "—")")
-                        .font(.system(size: 22, weight: .heavy))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(.black.opacity(0.35))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in hrBadge }
                     Spacer()
                 }
                 .padding()
@@ -89,7 +85,12 @@ struct RecordView: View {
             // Keep the screen awake — auto-lock kills the camera session and
             // was silently ending recordings.
             UIApplication.shared.isIdleTimerDisabled = true
-            rec.overlayProvider = { (hr.bpm, Zones.zoneOf(hr.bpm, store.profile)) }
+            let monitor = hr, s = store
+            rec.overlayProvider = { [weak monitor, weak s] in
+                // Stale signal burns in "--"/NO SIGNAL, never a frozen number.
+                guard let monitor, let s, monitor.bpm > 0, monitor.isFresh else { return (0, -1) }
+                return (monitor.bpm, Zones.zoneOf(monitor.bpm, s.profile))
+            }
             if !hr.status.isLive { hr.connect() }
             requestCameraThenConfigure()
         }
@@ -98,6 +99,38 @@ struct RecordView: View {
             UIApplication.shared.isIdleTimerDisabled = engine.running
             rec.stopSession()
         }
+    }
+
+    /// SwiftUI twin of the badge VideoRecorder burns into the video.
+    private var hrBadge: some View {
+        let live = liveHR
+        let z = live ? zone : -1
+        let inZone = live && z >= 0
+        let darkText = z == 2 || z == 3
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 21, weight: .bold))
+                    .foregroundStyle(live ? Theme.accent : .white.opacity(0.35))
+                Text(live ? "\(hr.bpm)" : "--")
+                    .font(.system(size: 38, weight: .heavy, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+                Text("BPM")
+                    .font(.system(size: 12, weight: .bold)).tracking(3)
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+            Text(VideoRecorder.pillLabel(bpm: live ? hr.bpm : 0, zone: z))
+                .font(.system(size: 12, weight: .heavy)).tracking(1.5)
+                .foregroundStyle(inZone ? (darkText ? Theme.bg : .white) : .white.opacity(0.7))
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(inZone ? Theme.zoneColors[z] : Color.white.opacity(0.15))
+                .clipShape(Capsule())
+        }
+        .padding(12)
+        .background(.black.opacity(0.45))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
     private func requestCameraThenConfigure() {
