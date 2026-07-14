@@ -1,8 +1,8 @@
 import Foundation
 import Combine
 
-/// Persists profile, per-sport timers, active sport, and session history.
-/// Profile/timers/active sport live in UserDefaults; sessions in a JSON file in Documents.
+/// Persists profile, per-activity timers, active activity, and session history.
+/// Profile/timers/active activity live in UserDefaults; sessions in a JSON file in Documents.
 final class Store: ObservableObject {
     @Published var profile: Profile { didSet { persistProfile() } }
     @Published var timers: [Activity: TimerConfig] { didSet { persistTimers() } }
@@ -23,7 +23,9 @@ final class Store: ObservableObject {
         profile = Self.decode(defaults.data(forKey: kProfile)) ?? Profile()
         if let map: [String: TimerConfig] = Self.decode(defaults.data(forKey: kTimers)) {
             var t: [Activity: TimerConfig] = [:]
-            for a in Activity.allCases { t[a] = map[a.rawValue] ?? .defaults(for: a) }
+            for a in Activity.allCases {
+                t[a] = (map[a.rawValue] ?? .defaults(for: a)).normalized(for: a)
+            }
             timers = t
         } else {
             timers = Dictionary(uniqueKeysWithValues: Activity.allCases.map { ($0, .defaults(for: $0)) })
@@ -33,8 +35,8 @@ final class Store: ObservableObject {
     }
 
     var timerCfg: TimerConfig {
-        get { timers[activity] ?? .defaults(for: activity) }
-        set { timers[activity] = newValue }
+        get { (timers[activity] ?? .defaults(for: activity)).normalized(for: activity) }
+        set { timers[activity] = newValue.normalized(for: activity) }
     }
 
     func add(_ s: Session) {
@@ -59,7 +61,9 @@ final class Store: ObservableObject {
     }
 
     // MARK: CSV export — same columns as exportCsv() in index.html
-    func csv() -> String {
+    func csv() -> String { Self.csv(sessions: sessions) }
+
+    static func csv(sessions: [Session]) -> String {
         var out = "date,time,activity,duration_sec,kcal,avg_hr,max_hr,z1_sec,z2_sec,z3_sec,z4_sec,z5_sec,mode,rounds,distance_m\n"
         let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
         let tf = DateFormatter(); tf.dateFormat = "HH:mm"

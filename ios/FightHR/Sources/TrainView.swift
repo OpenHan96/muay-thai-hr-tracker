@@ -16,7 +16,7 @@ struct TrainView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 12) {
-                    sportSwitcher
+                    activitySwitcher
                     connectButton
                     sessionButtons
                     hrCard
@@ -66,15 +66,21 @@ struct TrainView: View {
         }
     }
 
-    private var sportSwitcher: some View {
-        Picker("Sport", selection: Binding(
-            get: { store.activity },
-            set: { if !engine.running { store.activity = $0 } }
-        )) {
-            ForEach(Activity.allCases) { a in Text("\(a.icon) \(a.label)").tag(a) }
+    private var activitySwitcher: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
+            ForEach(Activity.allCases) { activity in
+                ActivityChip(
+                    icon: activity.icon,
+                    title: activity.label,
+                    isSelected: store.activity == activity,
+                    isEnabled: !engine.running
+                ) {
+                    store.activity = activity
+                }
+            }
         }
-        .pickerStyle(.segmented)
-        .disabled(engine.running)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Activity")
     }
 
     private var connectButton: some View {

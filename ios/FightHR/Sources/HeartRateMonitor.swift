@@ -183,9 +183,9 @@ final class HeartRateMonitor: NSObject, ObservableObject, CBCentralManagerDelega
     private func parseHR(_ data: Data) {
         guard data.count >= 2 else { return }
         let flags = data[0]
-        let hr: Int = (flags & 0x01) != 0
-            ? Int(data[1]) | (Int(data[2]) << 8)
-            : Int(data[1])
+        let uses16BitValue = (flags & 0x01) != 0
+        guard !uses16BitValue || data.count >= 3 else { return }
+        let hr = uses16BitValue ? Int(data[1]) | (Int(data[2]) << 8) : Int(data[1])
         ingest(hr)
     }
 }

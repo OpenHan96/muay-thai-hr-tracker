@@ -48,7 +48,7 @@ struct SummarySheet: View {
                 .padding(16)
             }
             .background(Theme.bg)
-            .navigationTitle("Session Complete 🥊")
+            .navigationTitle("\(session.activity.label) Complete \(session.activity.icon)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }

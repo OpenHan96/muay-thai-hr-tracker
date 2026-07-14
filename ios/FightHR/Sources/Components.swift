@@ -110,6 +110,39 @@ struct StatCell: View {
     }
 }
 
+/// Compact, reusable activity selector used by Train and History.
+struct ActivityChip: View {
+    let icon: String
+    let title: String
+    let isSelected: Bool
+    var isEnabled = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(icon)
+                Text(title).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .font(.subheadline).bold()
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isSelected ? .white : Theme.text)
+        .background(isSelected ? Theme.accent : Theme.panel2)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(isSelected ? Theme.accent : Theme.border, lineWidth: 1)
+        }
+        .opacity(isEnabled ? 1 : 0.5)
+        .disabled(!isEnabled)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
 /// Share-sheet wrapper for CSV export.
 struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]

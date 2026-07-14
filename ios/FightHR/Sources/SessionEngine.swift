@@ -183,6 +183,6 @@ final class SessionEngine: ObservableObject {
     /// Demo target HR for the monitor's simulator (rest vs work intensity).
     func demoTarget() -> Double {
         guard running, !paused else { return 75 }
-        return phase == .rest ? 120 : 155 + 20 * sin(elapsed / 40)
+        return phase == .rest ? 120 : store.activity.demoHeartRate(at: elapsed)
     }
 }

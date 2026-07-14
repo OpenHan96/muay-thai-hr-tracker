@@ -20,7 +20,7 @@ struct HistoryView: View {
                     Card("Last 8 Weeks") { trendChart }
                     totals
                     if filtered.isEmpty {
-                        Card { Text("No sessions yet. Connect your monitor and start training.")
+                        Card { Text("No sessions yet. Connect your monitor and record an activity.")
                             .font(.footnote).foregroundStyle(Theme.muted)
                             .frame(maxWidth: .infinity) }
                     } else {
@@ -36,11 +36,24 @@ struct HistoryView: View {
     }
 
     private var filterPicker: some View {
-        Picker("Filter", selection: $filter) {
-            Text("All").tag(Activity?.none)
-            ForEach(Activity.allCases) { a in Text("\(a.icon) \(a.label)").tag(Activity?.some(a)) }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ActivityChip(icon: "◎", title: "All", isSelected: filter == nil) { filter = nil }
+                    .frame(minWidth: 72)
+                ForEach(Activity.allCases) { activity in
+                    ActivityChip(
+                        icon: activity.icon,
+                        title: activity.label,
+                        isSelected: filter == activity
+                    ) {
+                        filter = activity
+                    }
+                    .frame(minWidth: 100)
+                }
+            }
         }
-        .pickerStyle(.segmented)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("History activity filter")
     }
 
     private var totals: some View {
@@ -72,7 +85,7 @@ struct HistoryView: View {
     private func sessionRow(_ s: Session) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("\(s.activity.icon) \(s.ts.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))")
+                Text("\(s.activity.icon) \(s.activity.label) · \(s.ts.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))")
                     .bold()
                 Spacer()
                 Text(s.ts.formatted(.dateTime.hour().minute())).foregroundStyle(Theme.muted)

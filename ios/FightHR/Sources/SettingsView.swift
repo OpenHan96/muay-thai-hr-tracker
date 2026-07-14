@@ -65,11 +65,17 @@ struct SettingsView: View {
     private var modeSection: some View {
         let cfg = Binding(get: { store.timerCfg }, set: { store.timerCfg = $0 })
         return Section("Session Mode — \(store.activity.icon) \(store.activity.label)") {
-            Picker("Mode", selection: cfg.mode) {
-                Text("Continuous").tag(TimerMode.continuous)
-                Text("Rounds").tag(TimerMode.rounds)
-            }.pickerStyle(.segmented)
-            if store.timerCfg.mode == .rounds {
+            if store.activity.supportsRounds {
+                Picker("Mode", selection: cfg.mode) {
+                    Text("Continuous").tag(TimerMode.continuous)
+                    Text("Rounds").tag(TimerMode.rounds)
+                }.pickerStyle(.segmented)
+            } else {
+                Label("Continuous heart-rate tracking", systemImage: "heart.text.square")
+                Text("Therapy sessions use a simple elapsed timer without rounds or bells.")
+                    .font(.caption).foregroundStyle(Theme.muted)
+            }
+            if store.activity.supportsRounds && store.timerCfg.mode == .rounds {
                 HStack { Text("Round length (min)"); Spacer()
                     TextField("3", value: cfg.roundMin, format: .number).keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing).frame(width: 70) }

@@ -7,7 +7,8 @@ standard Bluetooth heart-rate monitor **directly via the iPhone's own Bluetooth
 Feature parity with the web app: live HR + zone, training zones (% max HR or
 Karvonen), Keytel calories, round timer (Muay Thai / BJJ defaults) with bells,
 10-second warning, per-round stats + 60-second recovery HR, session history with an
-8-week trend chart, and CSV export.
+8-week trend chart, and CSV export. Sauna and ice-bath therapy can also be recorded
+as continuous heart-rate sessions with their own history filters and summaries.
 
 ## Requirements
 - A Mac with **full Xcode** installed (App Store, ~7 GB). Command Line Tools alone is
@@ -40,10 +41,19 @@ Karvonen), Keytel calories, round timer (Muay Thai / BJJ defaults) with bells,
 4. First launch only: the app is from a "developer," so approve it on the phone:
    **Settings → General → VPN & Device Management → (your developer cert) → Trust**,
    then reopen the app.
-5. In the app: **Train** tab → **Connect HR Monitor** → approve the Bluetooth
-   permission prompt → wake the COROS. Live BPM should stream with no Bluefy.
+5. In the app: **Train** tab → choose an activity → **Connect HR Monitor** → approve
+   the Bluetooth permission prompt → wake the COROS. Live BPM should stream with no
+   Bluefy. Choose **Sauna** or **Ice Bath** to record a continuous therapy session.
 
 Tip: use **Demo mode** (bottom of the Train tab) to exercise the UI without a strap.
+
+## Run model tests
+```bash
+cd ios
+xcrun swiftc FightHR/Sources/{Activity,Profile,Session,Store}.swift \
+  FightHRTests/ActivityModelTests.swift \
+  -o /tmp/fighthr-activity-tests && /tmp/fighthr-activity-tests
+```
 
 ## Share it with others
 - **TestFlight** (recommended): in Xcode, **Product → Archive**, then distribute to
