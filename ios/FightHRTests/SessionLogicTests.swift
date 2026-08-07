@@ -13,6 +13,8 @@ enum SessionLogicTests {
         try maxHrOverrideWins()
         try caloriesNeverGoNegative()
         try durationLabelsFormatCorrectly()
+        try captureRotationTableIsCorrect()
+        try oppositeOrientationsAreHalfATurnApart()
         print("SessionLogicTests: all tests passed")
     }
 
@@ -115,6 +117,35 @@ enum SessionLogicTests {
         try expect(Store.durationLabel(3_600) == "1:00:00", "hour label wrong")
         try expect(Store.durationLabel(3_725) == "1:02:05", "hour+ label wrong")
         try expect(Store.durationLabel(-10) == "0:00", "negative duration should clamp")
+    }
+
+    // MARK: capture orientation
+
+    /// Pins the rotation table. Hard-locking this to portrait is what recorded
+    /// upside-down video with a flipped HR badge when the phone was propped
+    /// or clipped the other way up.
+    private static func captureRotationTableIsCorrect() throws {
+        try expect(CaptureOrientation.portrait.rotationAngle == 90,
+                   "upright portrait needs a quarter turn off the landscape-native sensor")
+        try expect(CaptureOrientation.portraitUpsideDown.rotationAngle == 270,
+                   "upside-down portrait must be 270, not 90 — this is the flipped-video bug")
+        try expect(CaptureOrientation.landscapeLeft.rotationAngle == 0,
+                   "landscape left is the sensor's native orientation")
+        try expect(CaptureOrientation.landscapeRight.rotationAngle == 180,
+                   "landscape right must be a half turn from landscape left")
+
+        // every orientation distinct, and all within one full turn
+        let angles = CaptureOrientation.allCases.map(\.rotationAngle)
+        try expect(Set(angles).count == 4, "two orientations share a rotation angle")
+        try expect(angles.allSatisfy { (0..<360).contains($0) }, "rotation angle outside 0..<360")
+    }
+
+    private static func oppositeOrientationsAreHalfATurnApart() throws {
+        for o in CaptureOrientation.allCases {
+            let delta = abs(o.rotationAngle - o.opposite.rotationAngle)
+            try expect(delta == 180, "\(o) and its opposite are \(delta)° apart, expected 180°")
+            try expect(o.opposite.opposite == o, "\(o) opposite is not symmetric")
+        }
     }
 
     private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {

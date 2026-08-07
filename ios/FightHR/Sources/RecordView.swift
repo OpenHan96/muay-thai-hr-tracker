@@ -13,7 +13,8 @@ struct RecordView: View {
 
     var body: some View {
         ZStack {
-            CameraPreview(session: rec.session).ignoresSafeArea()
+            CameraPreview(session: rec.session, orientation: rec.captureOrientation)
+                .ignoresSafeArea()
 
             VStack {
                 // live overlay preview (matches what gets burned in)
@@ -150,13 +151,23 @@ struct RecordView: View {
 /// Hosts the live camera preview layer.
 struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
+    /// Kept in step with the recorder so the preview shows the same framing
+    /// that is being written to the file.
+    var orientation: CaptureOrientation = .portrait
+
     func makeUIView(context: Context) -> PreviewUIView {
         let v = PreviewUIView()
         v.videoPreviewLayer.session = session
         v.videoPreviewLayer.videoGravity = .resizeAspectFill
+        applyOrientation(to: v)
         return v
     }
-    func updateUIView(_ uiView: PreviewUIView, context: Context) {}
+    func updateUIView(_ uiView: PreviewUIView, context: Context) { applyOrientation(to: uiView) }
+
+    private func applyOrientation(to view: PreviewUIView) {
+        guard let c = view.videoPreviewLayer.connection else { return }
+        VideoRecorder.apply(orientation, to: c)
+    }
 
     final class PreviewUIView: UIView {
         override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }

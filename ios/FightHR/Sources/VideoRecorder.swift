@@ -35,8 +35,68 @@ final class VideoRecorder: NSObject, ObservableObject,
     /// Pulled each frame to draw the overlay. Set by the view from live HR.
     var overlayProvider: () -> (bpm: Int, zone: Int) = { (0, -1) }
 
+    // MARK: orientation
+    /// Orientation the camera records in. It used to be hard-locked to
+    /// .portrait at setup, so filming with the phone upside down (propped or
+    /// clipped to a tripod) produced a 180°-rotated video with the HR badge
+    /// upside down in the corner. Now it follows the device, and is frozen for
+    /// the duration of a recording — changing it mid-file would change the
+    /// frame dimensions and break the writer.
+    @Published private(set) var captureOrientation: CaptureOrientation = .portrait
+
+    private static func captureOrientation(from device: UIDeviceOrientation) -> CaptureOrientation? {
+        switch device {
+        case .portrait: return .portrait
+        case .portraitUpsideDown: return .portraitUpsideDown
+        case .landscapeLeft: return .landscapeLeft
+        case .landscapeRight: return .landscapeRight
+        default: return nil          // faceUp/faceDown/unknown — keep last good
+        }
+    }
+
+    /// Legacy path for iOS 16, which has no videoRotationAngle. A device held
+    /// landscape-left produces a landscape-right video frame.
+    private static func legacyOrientation(_ o: CaptureOrientation) -> AVCaptureVideoOrientation {
+        switch o {
+        case .portrait: return .portrait
+        case .portraitUpsideDown: return .portraitUpsideDown
+        case .landscapeLeft: return .landscapeRight
+        case .landscapeRight: return .landscapeLeft
+        }
+    }
+
+    static func apply(_ o: CaptureOrientation, to connection: AVCaptureConnection) {
+        if #available(iOS 17.0, *) {
+            let angle = CGFloat(o.rotationAngle)
+            if connection.isVideoRotationAngleSupported(angle) { connection.videoRotationAngle = angle }
+        } else if connection.isVideoOrientationSupported {
+            connection.videoOrientation = legacyOrientation(o)
+        }
+    }
+
+    @objc private func deviceOrientationChanged() {
+        // Never re-orient mid-recording: the writer is sized to the first
+        // frame, so a rotation would change frame dimensions and stall it.
+        guard !isRecording,
+              let o = Self.captureOrientation(from: UIDevice.current.orientation),
+              o != captureOrientation else { return }
+        captureOrientation = o
+        queue.async { [weak self] in
+            guard let self, !self.active,
+                  let c = self.videoOut.connection(with: .video) else { return }
+            Self.apply(o, to: c)
+        }
+    }
+
     override init() {
         super.init()
+        // Seed from the device now, then track it.
+        if let o = Self.captureOrientation(from: UIDevice.current.orientation) { captureOrientation = o }
+        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(deviceOrientationChanged),
+            name: UIDevice.orientationDidChangeNotification, object: nil)
+
         // Screen lock, phone call, app switch, camera grabbed by another app:
         // finish and save the recording instead of abandoning the file.
         let nc = NotificationCenter.default
@@ -59,7 +119,11 @@ final class VideoRecorder: NSObject, ObservableObject,
         })
     }
 
-    deinit { observers.forEach { NotificationCenter.default.removeObserver($0) } }
+    deinit {
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
+        NotificationCenter.default.removeObserver(self)
+        UIDevice.current.endGeneratingDeviceOrientationNotifications()
+    }
 
     // MARK: setup
     private var configured = false
@@ -87,8 +151,8 @@ final class VideoRecorder: NSObject, ObservableObject,
             if self.session.canAddOutput(self.videoOut) { self.session.addOutput(self.videoOut) }
             self.audioOut.setSampleBufferDelegate(self, queue: self.queue)
             if self.session.canAddOutput(self.audioOut) { self.session.addOutput(self.audioOut) }
-            if let c = self.videoOut.connection(with: .video), c.isVideoOrientationSupported {
-                c.videoOrientation = .portrait
+            if let c = self.videoOut.connection(with: .video) {
+                Self.apply(self.captureOrientation, to: c)
             }
             self.session.commitConfiguration()
             self.session.startRunning()
@@ -121,6 +185,7 @@ final class VideoRecorder: NSObject, ObservableObject,
             self.adaptor = nil; self.startPTS = .invalid
             self.lastElapsedWhole = -1
             self.droppedFrames = 0
+            self.cachedKey = ""       // resolution may differ from the last take
             self.active = true
             self.pendingStart = true
             DispatchQueue.main.async { self.isRecording = true; self.elapsed = 0; self.savedMessage = nil }
@@ -282,8 +347,10 @@ final class VideoRecorder: NSObject, ObservableObject,
     private func overlay(on base: CIImage) -> CIImage {
         let (bpm, zone) = overlayProvider()
         let extent = base.extent
-        let scale = max(1, extent.width / 1080)   // badge designed for 1080-wide video
-        let key = "\(bpm)|\(zone)"
+        // Scale off the SHORT edge so the badge is the same relative size in
+        // portrait (1080x1920) and landscape (1920x1080).
+        let scale = max(0.75, min(extent.width, extent.height) / 1080)
+        let key = "\(bpm)|\(zone)|\(scale)"
         if key != cachedKey {
             cachedKey = key
             cachedLabel = Self.renderBadge(bpm: bpm, zone: zone, scale: scale)

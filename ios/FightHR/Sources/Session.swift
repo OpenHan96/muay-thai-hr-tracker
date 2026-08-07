@@ -10,6 +10,35 @@ struct RoundStat: Codable, Identifiable, Equatable {
     var recovery: Int?      // bpm drop 60s into rest, nil if not captured
 }
 
+/// How the phone is physically held while filming, kept free of UIKit so the
+/// rotation table can be unit tested. Getting this table wrong is what recorded
+/// upside-down video with a flipped HR badge.
+enum CaptureOrientation: String, CaseIterable {
+    case portrait, portraitUpsideDown, landscapeLeft, landscapeRight
+
+    /// Clockwise rotation the capture pipeline must apply, in degrees. The
+    /// camera sensor is landscape-native, so holding the phone upright needs
+    /// a quarter turn.
+    var rotationAngle: Double {
+        switch self {
+        case .portrait: return 90
+        case .portraitUpsideDown: return 270
+        case .landscapeLeft: return 0
+        case .landscapeRight: return 180
+        }
+    }
+
+    /// Upright and upside down differ by a half turn; so do the two landscapes.
+    var opposite: CaptureOrientation {
+        switch self {
+        case .portrait: return .portraitUpsideDown
+        case .portraitUpsideDown: return .portrait
+        case .landscapeLeft: return .landscapeRight
+        case .landscapeRight: return .landscapeLeft
+        }
+    }
+}
+
 /// One point on the live HR chart. The series is downsampled, so this is not
 /// necessarily a raw 1Hz reading.
 struct HRPoint: Identifiable, Equatable {
