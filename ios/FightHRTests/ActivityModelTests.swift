@@ -9,6 +9,7 @@ enum ActivityModelTests {
         try therapySessionsRoundTripAndExportTheirActivity()
         try demoSignalsMatchActivityIntensity()
         print("ActivityModelTests: all tests passed")
+        try SessionLogicTests.runAll()
     }
 
     private static func activityCatalogIncludesTherapies() throws {

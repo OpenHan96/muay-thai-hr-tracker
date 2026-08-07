@@ -18,13 +18,16 @@ struct TrainView: View {
                 VStack(spacing: 12) {
                     activitySwitcher
                     connectButton
+                    if let msg = engine.notice ?? store.recoveredNotice {
+                        noticeBanner(msg)
+                    }
                     sessionButtons
                     hrCard
                     timerCard
                     statGrid
                     Card("Time in Zones") { ZoneBars(zoneSec: engine.zoneSec) }
                     Card("Heart Rate") {
-                        HRChart(samples: engine.samples, profile: store.profile)
+                        HRChart(samples: engine.chartSamples, profile: store.profile)
                     }
                     if store.timerCfg.mode == .rounds && !engine.liveRounds.isEmpty {
                         roundsCard
@@ -81,6 +84,29 @@ struct TrainView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Activity")
+    }
+
+    /// Explains why a session wasn't saved, or that one was recovered after a
+    /// crash. Dismissed by tapping.
+    private func noticeBanner(_ msg: String) -> some View {
+        Button {
+            engine.notice = nil
+            store.recoveredNotice = nil
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "info.circle.fill")
+                Text(msg).font(.footnote).multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+                Image(systemName: "xmark").font(.caption2)
+            }
+            .foregroundStyle(Theme.text)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(Theme.panel2)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     private var connectButton: some View {

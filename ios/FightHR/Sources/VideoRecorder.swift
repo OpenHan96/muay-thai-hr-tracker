@@ -62,9 +62,14 @@ final class VideoRecorder: NSObject, ObservableObject,
     deinit { observers.forEach { NotificationCenter.default.removeObserver($0) } }
 
     // MARK: setup
+    private var configured = false
     func configure() {
         queue.async { [weak self] in
-            guard let self else { return }
+            guard let self, !self.configured else { return }
+            self.configured = true
+            // Capture-safe audio category BEFORE the session starts, so bells
+            // and spoken cues can't tear down the mic route mid-recording.
+            AudioHub.beginCapture()
             self.session.beginConfiguration()
             self.session.sessionPreset = .high
             // camera
@@ -99,6 +104,8 @@ final class VideoRecorder: NSObject, ObservableObject,
             guard let self else { return }
             self.finishOnQueue(note: nil)
             if self.session.isRunning { self.session.stopRunning() }
+            self.configured = false
+            AudioHub.endCapture()
         }
     }
 
@@ -113,6 +120,7 @@ final class VideoRecorder: NSObject, ObservableObject,
             self.writer = nil; self.videoIn = nil; self.audioIn = nil
             self.adaptor = nil; self.startPTS = .invalid
             self.lastElapsedWhole = -1
+            self.droppedFrames = 0
             self.active = true
             self.pendingStart = true
             DispatchQueue.main.async { self.isRecording = true; self.elapsed = 0; self.savedMessage = nil }
@@ -199,6 +207,13 @@ final class VideoRecorder: NSObject, ObservableObject,
     // MARK: capture delegate
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
+        // Core Image / CoreVideo autorelease heavily at 30fps. Without an
+        // explicit pool the capture queue never drains and memory climbs until
+        // iOS kills the app — that was the long-recording crash.
+        autoreleasepool { handle(output, sampleBuffer) }
+    }
+
+    private func handle(_ output: AVCaptureOutput, _ sampleBuffer: CMSampleBuffer) {
         guard active else { return }
         // Build the writer on the first video frame, sized to that frame.
         if pendingStart {
@@ -247,8 +262,16 @@ final class VideoRecorder: NSObject, ObservableObject,
         guard let dst = out else { return }
         let composited = overlay(on: CIImage(cvPixelBuffer: src))
         ciContext.render(composited, to: dst)
-        adaptor.append(dst, withPresentationTime: pts)
+        if !adaptor.append(dst, withPresentationTime: pts) {
+            droppedFrames += 1
+            // A handful of drops is normal under load; a sustained failure
+            // means the writer is dead and the file will be unusable.
+            if droppedFrames > 90 { finishOnQueue(note: "Recording ended early (encoder stalled)") }
+        } else {
+            droppedFrames = 0
+        }
     }
+    private var droppedFrames = 0
 
     // MARK: overlay
     private var cachedKey = ""

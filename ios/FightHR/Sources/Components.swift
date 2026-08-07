@@ -67,13 +67,17 @@ struct ZoneStrip: View {
 }
 
 /// Live HR line over zone bands. Mirrors drawHrChart.
+///
+/// Takes an already-downsampled series (see SessionEngine.downsample): drawing
+/// one mark per raw second made this chart the most expensive view in the app
+/// and it was rebuilt every tick.
 struct HRChart: View {
-    let samples: [(t: Int, hr: Int)]
+    let samples: [HRPoint]
     let profile: Profile
     var body: some View {
         let mx = Zones.maxHr(profile)
         let bounds = Zones.bounds(profile)
-        let lo = 50, hi = mx + 10
+        let lo = 50, hi = max(mx + 10, (samples.map(\.hr).max() ?? 0) + 5)
         Chart {
             // zone bands
             ForEach(0..<5, id: \.self) { i in
@@ -84,7 +88,7 @@ struct HRChart: View {
                 )
                 .foregroundStyle(Theme.zoneColors[i].opacity(0.15))
             }
-            ForEach(Array(samples.enumerated()), id: \.offset) { _, p in
+            ForEach(samples) { p in
                 LineMark(x: .value("t", p.t), y: .value("hr", p.hr))
                     .foregroundStyle(.white)
                     .interpolationMethod(.monotone)
@@ -92,7 +96,14 @@ struct HRChart: View {
         }
         .chartYScale(domain: lo...hi)
         .chartXAxis(.hidden)
+        .chartLegend(.hidden)
         .frame(height: 140)
+        .overlay {
+            if samples.isEmpty {
+                Text("Waiting for heart rate…")
+                    .font(.caption).foregroundStyle(Theme.muted)
+            }
+        }
     }
 }
 

@@ -14,10 +14,16 @@ final class Store: ObservableObject {
     private let kTimers = "fighthr.timers"
     private let kActivity = "fighthr.activity"
 
-    private var sessionsURL: URL {
-        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return dir.appendingPathComponent("sessions.json")
+    /// Set when the previous run died mid-session and its autosave was recovered.
+    @Published var recoveredNotice: String?
+
+    private static var documentsDir: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
+    private var sessionsURL: URL { Self.documentsDir.appendingPathComponent("sessions.json") }
+    /// Snapshot of the live session, rewritten every few seconds so a crash or
+    /// an iOS memory kill can't lose the whole workout.
+    private var inProgressURL: URL { Self.documentsDir.appendingPathComponent("session-inprogress.json") }
 
     init() {
         profile = Self.decode(defaults.data(forKey: kProfile)) ?? Profile()
@@ -32,7 +38,34 @@ final class Store: ObservableObject {
         }
         activity = Activity(rawValue: defaults.string(forKey: kActivity) ?? "mt") ?? .mt
         sessions = (try? JSONDecoder().decode([Session].self, from: Data(contentsOf: sessionsURL))) ?? []
+        recoverInProgressSession()
     }
+
+    /// If an autosaved session is on disk at launch, the app never reached a
+    /// clean stop last time. Keep the workout instead of discarding it.
+    private func recoverInProgressSession() {
+        guard let data = try? Data(contentsOf: inProgressURL) else { return }
+        defer { clearInProgress() }
+        guard let s = try? JSONDecoder().decode(Session.self, from: data), s.durSec >= 30 else { return }
+        guard !sessions.contains(where: { $0.id == s.id }) else { return }
+        sessions.append(s)
+        persistSessions()
+        recoveredNotice = "Recovered \(Self.durationLabel(s.durSec)) \(s.activity.label) session that ended unexpectedly."
+    }
+
+    /// Local m:ss / h:mm:ss formatter — Store stays free of UI imports so the
+    /// model tests can compile it on its own.
+    static func durationLabel(_ seconds: Int) -> String {
+        let s = max(0, seconds)
+        let h = s / 3600, m = (s % 3600) / 60, sec = s % 60
+        return h > 0 ? String(format: "%d:%02d:%02d", h, m, sec) : String(format: "%d:%02d", m, sec)
+    }
+
+    func saveInProgress(_ s: Session) {
+        try? JSONEncoder().encode(s).write(to: inProgressURL, options: .atomic)
+    }
+
+    func clearInProgress() { try? FileManager.default.removeItem(at: inProgressURL) }
 
     var timerCfg: TimerConfig {
         get { (timers[activity] ?? .defaults(for: activity)).normalized(for: activity) }
@@ -53,7 +86,10 @@ final class Store: ObservableObject {
         let map = Dictionary(uniqueKeysWithValues: timers.map { ($0.key.rawValue, $0.value) })
         defaults.set(try? JSONEncoder().encode(map), forKey: kTimers)
     }
-    private func persistSessions() { try? JSONEncoder().encode(sessions).write(to: sessionsURL) }
+    /// Atomic so a crash mid-write can't truncate the whole history file.
+    private func persistSessions() {
+        try? JSONEncoder().encode(sessions).write(to: sessionsURL, options: .atomic)
+    }
 
     private static func decode<T: Decodable>(_ data: Data?) -> T? {
         guard let data else { return nil }

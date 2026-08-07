@@ -21,10 +21,9 @@ enum Announcer {
     }
 
     static func speak(_ text: String) {
-        // Duck/mix with the bells; don't interrupt an in-flight utterance abruptly.
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, options: [.mixWithOthers, .duckOthers])
-        try? session.setActive(true)
+        // AudioHub owns the category — changing it here would interrupt an
+        // in-flight video recording.
+        AudioHub.ensureReady()
         let u = AVSpeechUtterance(string: text)
         u.rate = AVSpeechUtteranceDefaultSpeechRate
         u.volume = 1.0

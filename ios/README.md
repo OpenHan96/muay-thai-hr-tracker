@@ -50,8 +50,8 @@ Tip: use **Demo mode** (bottom of the Train tab) to exercise the UI without a st
 ## Run model tests
 ```bash
 cd ios
-xcrun swiftc FightHR/Sources/{Activity,Profile,Session,Store}.swift \
-  FightHRTests/ActivityModelTests.swift \
+xcrun swiftc FightHR/Sources/{Activity,Profile,Session,Store,Zones}.swift \
+  FightHRTests/{ActivityModelTests,SessionLogicTests}.swift \
   -o /tmp/fighthr-activity-tests && /tmp/fighthr-activity-tests
 ```
 

@@ -10,6 +10,35 @@ struct RoundStat: Codable, Identifiable, Equatable {
     var recovery: Int?      // bpm drop 60s into rest, nil if not captured
 }
 
+/// One point on the live HR chart. The series is downsampled, so this is not
+/// necessarily a raw 1Hz reading.
+struct HRPoint: Identifiable, Equatable {
+    let id: Int
+    let t: Int
+    let hr: Int
+
+    /// Average raw samples into at most `cap` buckets, so charting cost stays
+    /// flat however long a session runs. Drawing one mark per raw second is
+    /// what made long sessions hang and get killed by iOS.
+    static func downsample(_ s: [(t: Int, hr: Int)], cap: Int) -> [HRPoint] {
+        guard cap > 0, !s.isEmpty else { return [] }
+        if s.count <= cap {
+            return s.enumerated().map { HRPoint(id: $0.offset, t: $0.element.t, hr: $0.element.hr) }
+        }
+        var out: [HRPoint] = []
+        out.reserveCapacity(cap)
+        let step = Double(s.count) / Double(cap)
+        for i in 0..<cap {
+            let lo = min(s.count - 1, Int(Double(i) * step))
+            let hi = min(s.count, max(lo + 1, Int(Double(i + 1) * step)))
+            let bucket = s[lo..<hi]
+            let avg = bucket.reduce(0) { $0 + $1.hr } / bucket.count
+            out.append(HRPoint(id: i, t: bucket[bucket.startIndex].t, hr: avg))
+        }
+        return out
+    }
+}
+
 /// A finished training session. Mirrors the saved `sess` object.
 struct Session: Codable, Identifiable, Equatable {
     var id = UUID()
