@@ -1,6 +1,27 @@
 import SwiftUI
 import Charts
 
+/// Identifies the running build. `buildDate` is the bundle's own timestamp, so
+/// it changes every time Xcode installs — the quickest way to tell whether the
+/// app on the phone is the build you just made or a stale one from another Mac.
+enum AppInfo {
+    static var versionLabel: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(short) (\(build))"
+    }
+
+    static var buildDateLabel: String {
+        guard let url = Bundle.main.executableURL,
+              let date = try? url.resourceValues(forKeys: [.contentModificationDateKey])
+                  .contentModificationDate else { return "—" }
+        let f = DateFormatter()
+        f.dateFormat = "d MMM HH:mm"
+        return f.string(from: date)
+    }
+}
+
 func fmtTime(_ seconds: Double) -> String {
     let s = max(0, Int(seconds.rounded()))
     let h = s / 3600, m = (s % 3600) / 60, sec = s % 60

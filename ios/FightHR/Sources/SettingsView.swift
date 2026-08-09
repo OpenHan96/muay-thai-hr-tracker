@@ -16,6 +16,7 @@ struct SettingsView: View {
                 modeSection
                 zonePreviewSection
                 dataSection
+                aboutSection
             }
             .scrollContentBackground(.hidden)
             .background(Theme.bg)
@@ -103,6 +104,25 @@ struct SettingsView: View {
                 }
             }
             Text("Max HR: \(mx) bpm\(store.profile.maxHrOverride > 0 ? "" : " (auto)")")
+                .font(.caption).foregroundStyle(Theme.muted)
+        }
+    }
+
+    /// Lets you confirm which build is actually on the phone — useful when the
+    /// same app gets built from more than one Mac.
+    private var aboutSection: some View {
+        Section("About") {
+            HStack {
+                Text("Version")
+                Spacer()
+                Text(AppInfo.versionLabel).foregroundStyle(Theme.muted).monospacedDigit()
+            }
+            HStack {
+                Text("Installed")
+                Spacer()
+                Text(AppInfo.buildDateLabel).foregroundStyle(Theme.muted).monospacedDigit()
+            }
+            Text("If this doesn't match the build you just made, Xcode installed an older copy — pull the latest on that Mac and run again.")
                 .font(.caption).foregroundStyle(Theme.muted)
         }
     }
