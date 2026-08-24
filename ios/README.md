@@ -47,13 +47,40 @@ as continuous heart-rate sessions with their own history filters and summaries.
 
 Tip: use **Demo mode** (bottom of the Train tab) to exercise the UI without a strap.
 
-## Run model tests
+## Run tests
 ```bash
 cd ios
 xcrun swiftc FightHR/Sources/{Activity,Profile,Session,Store,Zones}.swift \
   FightHRTests/{ActivityModelTests,SessionLogicTests}.swift \
   -o /tmp/fighthr-activity-tests && /tmp/fighthr-activity-tests
 ```
+
+The recorded-overlay orientation test must run inside a booted iOS Simulator:
+
+```bash
+SDK_PATH=$(xcrun --sdk iphonesimulator --show-sdk-path)
+xcrun swiftc -sdk "$SDK_PATH" -target arm64-apple-ios16.0-simulator \
+  FightHR/Sources/{Theme,VideoOverlayRenderer}.swift \
+  FightHRTests/VideoOverlayRenderingTests.swift \
+  -o /tmp/fighthr-overlay-tests
+xcrun simctl spawn booted /tmp/fighthr-overlay-tests
+```
+
+## Sentry diagnostics
+
+The iOS target uses the official Sentry Cocoa SDK. Its public client DSN comes
+from the `SENTRY_DSN` build setting and is substituted into `Info.plist`; no
+Sentry auth token is stored in the repository. Recording diagnostics include:
+
+- Camera interruptions, runtime errors, encoder stalls, and failed Photos saves.
+- A breadcrumb every 30 seconds with duration, frame size, dropped-frame counts,
+  encoder failures, and the phone's thermal state.
+- A stop reason distinguishing a user stop from backgrounding, camera failure,
+  encoder failure, or the recording view closing.
+
+In a Debug build, launch with `--sentry-test-event` to send one controlled
+integration event. Release archives still need a Sentry auth token in CI or the
+local environment if automatic dSYM uploads are added later.
 
 ## Share it with others
 - **TestFlight** (recommended): in Xcode, **Product → Archive**, then distribute to
@@ -82,6 +109,8 @@ ios/
       SessionEngine.swift    1Hz tick loop, round state machine, finalize
       Bells.swift            round bells + warning tones + haptics
       Components.swift       zone bars, HR chart, share sheet helpers
+      Telemetry.swift        privacy-minimal Sentry diagnostics
+      VideoOverlayRenderer.swift tested badge drawing for recorded frames
       TrainView.swift        main training screen
       HistoryView.swift      history list + 8-week trend
       SettingsView.swift     profile / mode / zones / data
@@ -92,7 +121,8 @@ ios/
 - HR decoding matches the Bluetooth Heart Rate Service spec (service `0x180D`,
   measurement `0x2A37`); zones/calories are ported 1:1 from the web app so numbers
   agree.
-- Data is on-device only (UserDefaults + a JSON file in the app's Documents). No
-  account, no cloud. Reinstalling clears it; export CSV first if you want a backup.
+- Training/session data is on-device only (UserDefaults + a JSON file in the app's
+  Documents). Sentry receives app diagnostics, not session history. Reinstalling
+  clears local data; export CSV first if you want a backup.
 - The web app (`../index.html`) remains the cross-platform / shareable version; this
   native app is the iPhone-direct-Bluetooth version.

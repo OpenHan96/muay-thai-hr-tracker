@@ -22,6 +22,8 @@
     <true/>
     <key>CFBundleDisplayName</key>
     <string>Fight HR</string>
+    <key>SentryDSN</key>
+    <string>$(SENTRY_DSN)</string>
     <key>NSBluetoothAlwaysUsageDescription</key>
     <string>Fight HR connects to your Bluetooth heart rate monitor to show live heart rate, zones and calories during training.</string>
     <key>NSLocationWhenInUseUsageDescription</key>

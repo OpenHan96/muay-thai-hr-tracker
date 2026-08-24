@@ -1,6 +1,6 @@
 # US Muay Thai Heart HR Tracker — Development Handoff
 
-Updated: 2026-07-14
+Updated: 2026-08-25
 
 ## Canonical repository
 
@@ -23,12 +23,24 @@ The native SwiftUI app builds and supports:
 - Continuous, silent tracking for Sauna and Ice Bath therapy sessions.
 - Session persistence, activity-aware history filters and summaries, and CSV export.
 - Training video recording with a heart-rate overlay.
+- Sentry diagnostics for crashes and unexpected recording stops.
 - Protection against malformed 16-bit Bluetooth heart-rate packets.
 
 Sauna and Ice Bath must remain continuous-only activities. They should not start
 GPS, use round timers, or play bells.
 
 ## Latest verified work
+
+- Version 1.4 fixes the vertically inverted BPM badge in saved recordings by
+  removing an incorrect second Core Image Y-axis flip.
+- The capture pipeline now discards late camera frames instead of building an
+  unbounded queue, records capture/backpressure/encoder drop counts, and reports
+  30-second recording heartbeats plus stop reasons to Sentry.
+- Sentry Cocoa is integrated through Swift Package Manager. A controlled Debug
+  event was received by the `apple-ios` Sentry project. No Sentry auth token is
+  stored in the repository.
+- A simulator pixel-buffer regression test verifies that the red heart remains
+  above the blue zone pill in the exact renderer used for recorded frames.
 
 - `1d9e795` — Add sauna and ice bath heart rate tracking.
 - `c38ddfe` — Fix stale HR during recording and redesign the overlay badge.
@@ -60,6 +72,15 @@ xcodebuild -project ios/FightHR.xcodeproj \
   -configuration Debug \
   CODE_SIGNING_ALLOWED=NO build
 ```
+
+If Swift Package Manager pauses while checking credentials, add
+`-packageAuthorizationProvider netrc`. For the overlay regression test, use the
+command documented in `ios/README.md`; it requires a booted iOS Simulator.
+
+The remaining device-only validation is a several-minute recording on a physical
+iPhone. If it stops, inspect the newest Sentry event's `recording.stop_reason` tag
+and the preceding `video.recording_heartbeat` breadcrumbs. Release dSYM upload is
+not automated yet and needs a Sentry auth token supplied outside the repository.
 
 ## Branding note
 

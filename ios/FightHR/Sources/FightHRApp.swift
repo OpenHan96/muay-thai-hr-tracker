@@ -8,6 +8,7 @@ struct FightHRApp: App {
     @StateObject private var engine: SessionEngine
 
     init() {
+        Telemetry.start()
         let s = Store()
         let h = HeartRateMonitor()
         let l = LocationTracker()

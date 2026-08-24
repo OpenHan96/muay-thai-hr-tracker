@@ -9,6 +9,9 @@ import os, hashlib
 
 DEVELOPMENT_TEAM = "9RYDT6H7V4"   # Eugene Han — update if the Apple team changes
 BUNDLE_ID = "com.fighthr.app"
+MARKETING_VERSION = "1.4"
+SENTRY_VERSION = "9.24.0"
+SENTRY_DSN = "https://06b6946af22dd3a4531d580a1157239e@o4511966563926016.ingest.de.sentry.io/4511966567792720"
 HERE = os.path.dirname(os.path.abspath(__file__))
 os.chdir(HERE)
 
@@ -23,9 +26,11 @@ SRCGROUP=oid("group-src");SOURCESGROUP=oid("group-sources-sub");PRODGROUP=oid("g
 TARGET=oid("target-app");SOURCES_PHASE=oid("phase-sources");RES_PHASE=oid("phase-resources")
 FRAMEWORKS_PHASE=oid("phase-frameworks");CFG_LIST_PROJ=oid("cfglist-proj");CFG_LIST_TGT=oid("cfglist-tgt")
 CFG_PROJ_DEBUG=oid("cfg-proj-debug");CFG_PROJ_REL=oid("cfg-proj-rel");CFG_TGT_DEBUG=oid("cfg-tgt-debug");CFG_TGT_REL=oid("cfg-tgt-rel")
+SENTRY_PACKAGE=oid("package-sentry");SENTRY_PRODUCT=oid("product-sentry");SENTRY_BUILD=oid("build-sentry")
 
 bf="\n".join(f"\t\t{build_files[s]} /* {s} in Sources */ = {{isa = PBXBuildFile; fileRef = {file_refs[s]} /* {s} */; }};" for s in SOURCES)
 bf+=f"\n\t\t{build_files[ASSET]} /* {ASSET} in Resources */ = {{isa = PBXBuildFile; fileRef = {file_refs[ASSET]} /* {ASSET} */; }};"
+bf+=f"\n\t\t{SENTRY_BUILD} /* SentrySPM in Frameworks */ = {{isa = PBXBuildFile; productRef = {SENTRY_PRODUCT} /* SentrySPM */; }};"
 fr="\n".join(f"\t\t{file_refs[s]} /* {s} */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = {s}; sourceTree = \"<group>\"; }};" for s in SOURCES)
 fr+=f"\n\t\t{file_refs[ASSET]} /* {ASSET} */ = {{isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = {ASSET}; sourceTree = \"<group>\"; }};"
 fr+=f"\n\t\t{file_refs[INFO]} /* {INFO} */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = {INFO}; sourceTree = \"<group>\"; }};"
@@ -49,9 +54,10 @@ def tgt_cfg(oid_, name):
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = {MARKETING_VERSION};
 				PRODUCT_BUNDLE_IDENTIFIER = {BUNDLE_ID};
 				PRODUCT_NAME = FightHR;
+				SENTRY_DSN = "{SENTRY_DSN}";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			}};
@@ -79,6 +85,7 @@ pbx=f"""// !$*UTF8*$!
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				{SENTRY_BUILD} /* SentrySPM in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		}};
@@ -135,6 +142,9 @@ pbx=f"""// !$*UTF8*$!
 			dependencies = (
 			);
 			name = FightHR;
+			packageProductDependencies = (
+				{SENTRY_PRODUCT} /* SentrySPM */,
+			);
 			productName = FightHR;
 			productReference = {PRODUCT} /* FightHR.app */;
 			productType = "com.apple.product-type.application";
@@ -163,6 +173,9 @@ pbx=f"""// !$*UTF8*$!
 				Base,
 			);
 			mainGroup = {MAINGROUP};
+			packageReferences = (
+				{SENTRY_PACKAGE} /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
+			);
 			productRefGroup = {PRODGROUP} /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -193,6 +206,25 @@ pbx=f"""// !$*UTF8*$!
 			runOnlyForDeploymentPostprocessing = 0;
 		}};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		{SENTRY_PACKAGE} /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {{
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa.git";
+			requirement = {{
+				kind = upToNextMajorVersion;
+				minimumVersion = {SENTRY_VERSION};
+			}};
+		}};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		{SENTRY_PRODUCT} /* SentrySPM */ = {{
+			isa = XCSwiftPackageProductDependency;
+			package = {SENTRY_PACKAGE} /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = SentrySPM;
+		}};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		{CFG_PROJ_DEBUG} /* Debug */ = {{

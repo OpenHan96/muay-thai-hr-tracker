@@ -30,7 +30,29 @@ final class VideoRecorder: NSObject, ObservableObject,
     private var active = false
     private var pendingStart = false
     private var lastElapsedWhole = -1
+    private var lastHeartbeatWhole = -1
+    private var frameWidth = 0
+    private var frameHeight = 0
+    private var captureDroppedFrames = 0
+    private var backpressureDroppedFrames = 0
     private var observers: [NSObjectProtocol] = []
+
+    private enum StopReason: String {
+        case user
+        case viewClosed = "view_closed"
+        case appInactive = "app_inactive"
+        case captureInterrupted = "capture_interrupted"
+        case captureRuntimeError = "capture_runtime_error"
+        case encoderStalled = "encoder_stalled"
+        case writerFailed = "writer_failed"
+
+        var unexpected: Bool {
+            switch self {
+            case .user: return false
+            default: return true
+            }
+        }
+    }
 
     /// Pulled each frame to draw the overlay. Set by the view from live HR.
     var overlayProvider: () -> (bpm: Int, zone: Int) = { (0, -1) }
@@ -102,20 +124,33 @@ final class VideoRecorder: NSObject, ObservableObject,
         let nc = NotificationCenter.default
         observers.append(nc.addObserver(forName: UIApplication.willResignActiveNotification,
                                         object: nil, queue: .main) { [weak self] _ in
-            self?.finish(note: "Interrupted — video saved")
+            self?.finish(note: "Interrupted — video saved", reason: .appInactive)
         })
         observers.append(nc.addObserver(forName: AVCaptureSession.wasInterruptedNotification,
-                                        object: session, queue: .main) { [weak self] _ in
-            self?.finish(note: "Camera interrupted — video saved")
+                                        object: session, queue: .main) { [weak self] notification in
+            let interruption = (notification.userInfo?[AVCaptureSessionInterruptionReasonKey] as? NSNumber)?.intValue
+            Telemetry.recordingSignal("video.capture_interrupted",
+                                      data: ["interruption_reason": interruption ?? -1])
+            self?.finish(note: "Camera interrupted — video saved", reason: .captureInterrupted)
         })
         observers.append(nc.addObserver(forName: AVCaptureSession.runtimeErrorNotification,
-                                        object: session, queue: .main) { [weak self] _ in
-            self?.finish(note: "Camera error — video saved")
+                                        object: session, queue: .main) { [weak self] notification in
+            let error = notification.userInfo?[AVCaptureSessionErrorKey] as? Error
+            self?.finish(note: "Camera error — video saved", reason: .captureRuntimeError,
+                         error: error)
         })
         observers.append(nc.addObserver(forName: AVCaptureSession.interruptionEndedNotification,
                                         object: session, queue: .main) { [weak self] _ in
             guard let self else { return }
-            self.queue.async { if !self.session.isRunning { self.session.startRunning() } }
+            self.queue.async {
+                guard self.configured, !self.session.isRunning else { return }
+                self.session.startRunning()
+            }
+        })
+        observers.append(nc.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification,
+                                        object: nil, queue: .main) { [weak self] _ in
+            guard self?.isRecording == true else { return }
+            Telemetry.recordingSignal("video.memory_warning")
         })
     }
 
@@ -147,6 +182,9 @@ final class VideoRecorder: NSObject, ObservableObject,
                 self.session.addInput(ain)
             }
             self.videoOut.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+            // Never allow camera frames to queue without bound when Core Image
+            // or the encoder is briefly slower than the capture frame rate.
+            self.videoOut.alwaysDiscardsLateVideoFrames = true
             self.videoOut.setSampleBufferDelegate(self, queue: self.queue)
             if self.session.canAddOutput(self.videoOut) { self.session.addOutput(self.videoOut) }
             self.audioOut.setSampleBufferDelegate(self, queue: self.queue)
@@ -166,7 +204,7 @@ final class VideoRecorder: NSObject, ObservableObject,
     func stopSession() {
         queue.async { [weak self] in
             guard let self else { return }
-            self.finishOnQueue(note: nil)
+            self.finishOnQueue(note: nil, reason: .viewClosed)
             if self.session.isRunning { self.session.stopRunning() }
             self.configured = false
             AudioHub.endCapture()
@@ -184,22 +222,32 @@ final class VideoRecorder: NSObject, ObservableObject,
             self.writer = nil; self.videoIn = nil; self.audioIn = nil
             self.adaptor = nil; self.startPTS = .invalid
             self.lastElapsedWhole = -1
+            self.lastHeartbeatWhole = -1
             self.droppedFrames = 0
+            self.captureDroppedFrames = 0
+            self.backpressureDroppedFrames = 0
+            self.frameWidth = 0; self.frameHeight = 0
             self.cachedKey = ""       // resolution may differ from the last take
             self.active = true
             self.pendingStart = true
+            Telemetry.recordingStarted(orientation: self.captureOrientation)
             DispatchQueue.main.async { self.isRecording = true; self.elapsed = 0; self.savedMessage = nil }
         }
     }
 
     func finish(note: String? = nil) {
-        queue.async { [weak self] in self?.finishOnQueue(note: note) }
+        finish(note: note, reason: .user)
     }
 
-    private func finishOnQueue(note: String?) {
+    private func finish(note: String?, reason: StopReason, error: Error? = nil) {
+        queue.async { [weak self] in self?.finishOnQueue(note: note, reason: reason, error: error) }
+    }
+
+    private func finishOnQueue(note: String?, reason: StopReason, error: Error? = nil) {
         guard active else { return }
         active = false
         pendingStart = false
+        let recordedElapsed = startPTS == .invalid ? 0 : Double(max(0, lastElapsedWhole))
         DispatchQueue.main.async { self.isRecording = false }
         defer {
             writer = nil; videoIn = nil; audioIn = nil
@@ -207,15 +255,21 @@ final class VideoRecorder: NSObject, ObservableObject,
         }
         guard let w = writer, let url = fileURL, w.status == .writing else {
             let reason = writer?.error?.localizedDescription ?? "no video frames captured"
+            Telemetry.recordingFinished(reason: StopReason.writerFailed.rawValue,
+                                        elapsed: recordedElapsed, unexpected: true,
+                                        error: writer?.error)
             DispatchQueue.main.async { self.savedMessage = "Recording failed (\(reason))" }
             return
         }
+        Telemetry.recordingFinished(reason: reason.rawValue, elapsed: recordedElapsed,
+                                    unexpected: reason.unexpected, error: error)
         videoIn?.markAsFinished(); audioIn?.markAsFinished()
         // The closure holds `w` and `url` strongly: writing + saving complete
         // even if the view (and this recorder) are dismissed meanwhile.
         w.finishWriting { [weak self] in
             if w.status == .completed {
                 VideoRecorder.saveToPhotos(url) { ok, denied in
+                    Telemetry.videoSaved(ok: ok, denied: denied)
                     DispatchQueue.main.async {
                         self?.savedMessage = ok ? (note ?? "Saved to Photos ✓")
                             : denied ? "Allow Photos access in Settings to save videos"
@@ -224,6 +278,9 @@ final class VideoRecorder: NSObject, ObservableObject,
                 }
             } else {
                 let reason = w.error?.localizedDescription ?? "unknown error"
+                Telemetry.recordingFinished(reason: StopReason.writerFailed.rawValue,
+                                            elapsed: recordedElapsed, unexpected: true,
+                                            error: w.error)
                 DispatchQueue.main.async { self?.savedMessage = "Recording failed (\(reason))" }
             }
         }
@@ -231,6 +288,8 @@ final class VideoRecorder: NSObject, ObservableObject,
 
     /// Build the writer sized to the actual frame (called on first video buffer).
     private func setupWriter(width: Int, height: Int) {
+        frameWidth = width
+        frameHeight = height
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("fighthr-\(Int(Date().timeIntervalSince1970)).mov")
         try? FileManager.default.removeItem(at: url)
@@ -278,6 +337,12 @@ final class VideoRecorder: NSObject, ObservableObject,
         autoreleasepool { handle(output, sampleBuffer) }
     }
 
+    func captureOutput(_ output: AVCaptureOutput, didDrop sampleBuffer: CMSampleBuffer,
+                       from connection: AVCaptureConnection) {
+        guard active, output == videoOut else { return }
+        captureDroppedFrames += 1
+    }
+
     private func handle(_ output: AVCaptureOutput, _ sampleBuffer: CMSampleBuffer) {
         guard active else { return }
         // Build the writer on the first video frame, sized to that frame.
@@ -298,6 +363,8 @@ final class VideoRecorder: NSObject, ObservableObject,
                     self.isRecording = false
                     self.savedMessage = "Recording failed (\(reason))"
                 }
+                Telemetry.recordingFinished(reason: StopReason.writerFailed.rawValue,
+                                            elapsed: 0, unexpected: true, error: w.error)
                 return
             }
             w.startSession(atSourceTime: pts)
@@ -311,16 +378,28 @@ final class VideoRecorder: NSObject, ObservableObject,
                 lastElapsedWhole = whole
                 DispatchQueue.main.async { self.elapsed = secs }
             }
+            if whole > 0 && whole % 30 == 0 && whole != lastHeartbeatWhole {
+                lastHeartbeatWhole = whole
+                Telemetry.recordingHeartbeat(elapsed: secs, width: frameWidth, height: frameHeight,
+                                             encoderFailures: droppedFrames,
+                                             captureDrops: captureDroppedFrames,
+                                             backpressureDrops: backpressureDroppedFrames)
+            }
         } else if output == audioOut, let aIn = audioIn, aIn.isReadyForMoreMediaData {
             aIn.append(sampleBuffer)
         }
-        if w.status == .failed { finishOnQueue(note: nil) }   // disk full etc. — surface it
+        if w.status == .failed {
+            finishOnQueue(note: nil, reason: .writerFailed, error: w.error)
+        }
     }
 
     private func appendVideo(_ sb: CMSampleBuffer, pts: CMTime) {
-        guard let vIn = videoIn, vIn.isReadyForMoreMediaData,
-              let adaptor, let pool = adaptor.pixelBufferPool,
+        guard let vIn = videoIn, let adaptor, let pool = adaptor.pixelBufferPool,
               let src = CMSampleBufferGetImageBuffer(sb) else { return }
+        guard vIn.isReadyForMoreMediaData else {
+            backpressureDroppedFrames += 1
+            return
+        }
         // draw overlay onto the camera frame, into a fresh writable buffer from the pool
         var out: CVPixelBuffer?
         CVPixelBufferPoolCreatePixelBuffer(nil, pool, &out)
@@ -331,7 +410,9 @@ final class VideoRecorder: NSObject, ObservableObject,
             droppedFrames += 1
             // A handful of drops is normal under load; a sustained failure
             // means the writer is dead and the file will be unusable.
-            if droppedFrames > 90 { finishOnQueue(note: "Recording ended early (encoder stalled)") }
+            if droppedFrames > 90 {
+                finishOnQueue(note: "Recording ended early (encoder stalled)", reason: .encoderStalled)
+            }
         } else {
             droppedFrames = 0
         }
@@ -362,106 +443,11 @@ final class VideoRecorder: NSObject, ObservableObject,
         return placed.composited(over: base)
     }
 
-    /// Z1..Z5 fills, mirroring Theme.zoneColors for UIKit drawing.
-    private static let zoneFill: [UIColor] = [
-        UIColor(red: 0x5d / 255.0, green: 0x8a / 255.0, blue: 0xa8 / 255.0, alpha: 1),
-        UIColor(red: 0x2a / 255.0, green: 0x9d / 255.0, blue: 0x8f / 255.0, alpha: 1),
-        UIColor(red: 0xe9 / 255.0, green: 0xc4 / 255.0, blue: 0x6a / 255.0, alpha: 1),
-        UIColor(red: 0xf4 / 255.0, green: 0xa2 / 255.0, blue: 0x61 / 255.0, alpha: 1),
-        UIColor(red: 0xe6 / 255.0, green: 0x39 / 255.0, blue: 0x46 / 255.0, alpha: 1),
-    ]
-
     static func pillLabel(bpm: Int, zone: Int) -> String {
-        guard bpm > 0 else { return "NO SIGNAL" }
-        guard zone >= 0 else { return "WARM-UP" }
-        let parts = Theme.zoneNames[zone].split(separator: " ", maxSplits: 1)
-        return parts.count > 1 ? "\(parts[0]) · \(String(parts[1]).uppercased())"
-                               : Theme.zoneNames[zone].uppercased()
+        VideoOverlayRenderer.pillLabel(bpm: bpm, zone: zone)
     }
 
     private static func renderBadge(bpm: Int, zone: Int, scale: CGFloat) -> CIImage {
-        let hasHR = bpm > 0
-        let pad: CGFloat = 30, gap: CGFloat = 16
-
-        let numFont: UIFont = {
-            let f = UIFont.monospacedDigitSystemFont(ofSize: 110, weight: .heavy)
-            guard let d = f.fontDescriptor.withDesign(.rounded) else { return f }
-            return UIFont(descriptor: d, size: 110)
-        }()
-        let shadow = NSShadow()
-        shadow.shadowColor = UIColor.black.withAlphaComponent(0.5)
-        shadow.shadowBlurRadius = 8
-        shadow.shadowOffset = CGSize(width: 0, height: 3)
-        let numText = hasHR ? "\(bpm)" : "--"
-        let numAttrs: [NSAttributedString.Key: Any] = [
-            .font: numFont, .foregroundColor: UIColor.white, .shadow: shadow,
-        ]
-        let numSize = (numText as NSString).size(withAttributes: numAttrs)
-
-        let bpmFont = UIFont.systemFont(ofSize: 30, weight: .bold)
-        let bpmAttrs: [NSAttributedString.Key: Any] = [
-            .font: bpmFont, .foregroundColor: UIColor(white: 1, alpha: 0.55), .kern: 3,
-        ]
-        let bpmSize = ("BPM" as NSString).size(withAttributes: bpmAttrs)
-
-        let heartCfg = UIImage.SymbolConfiguration(pointSize: 58, weight: .bold)
-        let heartTint = hasHR ? zoneFill[4] : UIColor(white: 1, alpha: 0.35)
-        let heart = UIImage(systemName: "heart.fill", withConfiguration: heartCfg)?
-            .withTintColor(heartTint, renderingMode: .alwaysOriginal)
-        let heartSz = heart?.size ?? CGSize(width: 58, height: 52)
-
-        let pillText = pillLabel(bpm: bpm, zone: zone)
-        let inZone = hasHR && zone >= 0
-        let darkText = zone == 2 || zone == 3   // yellow/orange pills read better dark
-        let pillAttrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: 33, weight: .heavy),
-            .foregroundColor: inZone
-                ? (darkText ? UIColor(red: 0.05, green: 0.06, blue: 0.08, alpha: 1) : UIColor.white)
-                : UIColor(white: 1, alpha: 0.7),
-            .kern: 1.5,
-        ]
-        let pillTextSize = (pillText as NSString).size(withAttributes: pillAttrs)
-        let pillFill: UIColor = inZone ? zoneFill[zone] : UIColor(white: 1, alpha: 0.15)
-        let pillH = pillTextSize.height + 26
-        let pillW = pillTextSize.width + 54
-
-        let row1H = max(heartSz.height, numSize.height)
-        let row1W = heartSz.width + 22 + numSize.width + 16 + bpmSize.width
-        let W = max(row1W, pillW) + pad * 2
-        let H = pad + row1H + gap + pillH + pad
-
-        let fmt = UIGraphicsImageRendererFormat()
-        fmt.scale = scale   // sizes above are pixels on a 1080-wide frame
-        fmt.opaque = false
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: W, height: H), format: fmt)
-        let img = renderer.image { _ in
-            UIColor.black.withAlphaComponent(0.45).setFill()
-            UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: W, height: H), cornerRadius: 34).fill()
-
-            var x = pad
-            heart?.draw(at: CGPoint(x: x, y: pad + (row1H - heartSz.height) / 2))
-            x += heartSz.width + 22
-
-            let numY = pad + (row1H - numSize.height) / 2
-            (numText as NSString).draw(at: CGPoint(x: x, y: numY), withAttributes: numAttrs)
-
-            // share the number's baseline
-            let bpmY = numY + numFont.ascender - bpmFont.ascender
-            ("BPM" as NSString).draw(at: CGPoint(x: x + numSize.width + 16, y: bpmY),
-                                     withAttributes: bpmAttrs)
-
-            let pillY = pad + row1H + gap
-            pillFill.setFill()
-            UIBezierPath(roundedRect: CGRect(x: pad, y: pillY, width: pillW, height: pillH),
-                         cornerRadius: pillH / 2).fill()
-            (pillText as NSString).draw(
-                at: CGPoint(x: pad + (pillW - pillTextSize.width) / 2,
-                            y: pillY + (pillH - pillTextSize.height) / 2),
-                withAttributes: pillAttrs)
-        }
-        // UIKit images are y-flipped relative to CoreImage; flip back
-        let ci = CIImage(image: img) ?? CIImage.empty()
-        return ci.transformed(by: CGAffineTransform(scaleX: 1, y: -1)
-            .translatedBy(x: 0, y: -ci.extent.height))
+        VideoOverlayRenderer.renderBadge(bpm: bpm, zone: zone, scale: scale)
     }
 }
