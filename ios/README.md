@@ -78,7 +78,10 @@ Sentry auth token is stored in the repository. Recording diagnostics include:
 - A stop reason distinguishing a user stop from backgrounding, camera failure,
   encoder failure, or the recording view closing.
 - A crash-resilient checkpoint. If iOS kills the process during recording, the
-  next launch emits one Sentry event with the last 30-second checkpoint.
+  next launch emits one Sentry event with the last 30-second checkpoint and
+  whether capture or finalization was in progress.
+- Background time is requested while an interrupted recording is finalized and
+  copied into Photos, and the checkpoint is cleared only after that completes.
 
 In a Debug build, launch with `--sentry-test-event` to send one controlled
 integration event. Release archives still need a Sentry auth token in CI or the

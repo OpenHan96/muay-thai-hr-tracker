@@ -35,6 +35,8 @@ GPS, use round timers, or play bells.
   removing an incorrect second Core Image Y-axis flip.
 - Version 1.5 (build 2) adds crash-resilient recording checkpoints and narrows
   automatic stopping from every inactive transition to actual backgrounding.
+- Version 1.6 (build 3) protects writer finalization and Photos saving with an
+  iOS background task, including interruption-before-background race handling.
 - The capture pipeline now discards late camera frames instead of building an
   unbounded queue, records capture/backpressure/encoder drop counts, and reports
   30-second recording heartbeats plus stop reasons to Sentry.
@@ -42,6 +44,9 @@ GPS, use round timers, or play bells.
   backgrounding does. A persisted 30-second checkpoint reports an unclean
   recording exit on the next launch with memory, disk, thermal, and frame-load
   evidence.
+- Backgrounded recordings now hold an iOS background-task assertion through
+  writer finalization and Photos saving. The checkpoint records whether capture
+  or finalization was active and is cleared only at a terminal outcome.
 - Sentry Cocoa is integrated through Swift Package Manager. A controlled Debug
   event was received by the `apple-ios` Sentry project. No Sentry auth token is
   stored in the repository.

@@ -129,7 +129,8 @@ final class VideoRecorder: NSObject, ObservableObject,
         })
         observers.append(nc.addObserver(forName: UIApplication.didEnterBackgroundNotification,
                                         object: nil, queue: .main) { [weak self] _ in
-            self?.finish(note: "Backgrounded — video saved", reason: .appBackgrounded)
+            guard let self, self.isRecording else { return }
+            self.finish(note: "Backgrounded — video saved", reason: .appBackgrounded)
         })
         observers.append(nc.addObserver(forName: AVCaptureSession.wasInterruptedNotification,
                                         object: session, queue: .main) { [weak self] notification in
@@ -207,9 +208,10 @@ final class VideoRecorder: NSObject, ObservableObject,
     /// first — the writer is kept alive by its completion handler, so the file
     /// lands in Photos even if this object is deallocated right after.
     func stopSession() {
+        let backgroundTask = isRecording ? RecordingBackgroundTask() : nil
         queue.async { [weak self] in
-            guard let self else { return }
-            self.finishOnQueue(note: nil, reason: .viewClosed)
+            guard let self else { backgroundTask?.end(); return }
+            self.finishOnQueue(note: nil, reason: .viewClosed, backgroundTask: backgroundTask)
             if self.session.isRunning { self.session.stopRunning() }
             self.configured = false
             AudioHub.endCapture()
@@ -245,11 +247,20 @@ final class VideoRecorder: NSObject, ObservableObject,
     }
 
     private func finish(note: String?, reason: StopReason, error: Error? = nil) {
-        queue.async { [weak self] in self?.finishOnQueue(note: note, reason: reason, error: error) }
+        // Start while still in the foreground. If a camera interruption is
+        // delivered just before didEnterBackground, this same task already
+        // protects writer finalization from suspension.
+        let backgroundTask = RecordingBackgroundTask()
+        queue.async { [weak self] in
+            guard let self else { backgroundTask.end(); return }
+            self.finishOnQueue(note: note, reason: reason, error: error,
+                               backgroundTask: backgroundTask)
+        }
     }
 
-    private func finishOnQueue(note: String?, reason: StopReason, error: Error? = nil) {
-        guard active else { return }
+    private func finishOnQueue(note: String?, reason: StopReason, error: Error? = nil,
+                               backgroundTask: RecordingBackgroundTask? = nil) {
+        guard active else { backgroundTask?.end(); return }
         active = false
         pendingStart = false
         let recordedElapsed = startPTS == .invalid ? 0 : Double(max(0, lastElapsedWhole))
@@ -265,10 +276,13 @@ final class VideoRecorder: NSObject, ObservableObject,
                                         elapsed: recordedElapsed, unexpected: true,
                                         error: failure)
             DispatchQueue.main.async { self.savedMessage = "Recording failed (\(reason))" }
+            backgroundTask?.end()
             return
         }
+        RecordingWatchdog.markFinalizing()
         Telemetry.recordingFinished(reason: reason.rawValue, elapsed: recordedElapsed,
-                                    unexpected: reason.unexpected, error: error)
+                                    unexpected: reason.unexpected, error: error,
+                                    clearCheckpoint: false)
         videoIn?.markAsFinished(); audioIn?.markAsFinished()
         // The closure holds `w` and `url` strongly: writing + saving complete
         // even if the view (and this recorder) are dismissed meanwhile.
@@ -276,6 +290,7 @@ final class VideoRecorder: NSObject, ObservableObject,
             if w.status == .completed {
                 VideoRecorder.saveToPhotos(url) { ok, denied in
                     Telemetry.videoSaved(ok: ok, denied: denied)
+                    backgroundTask?.end()
                     DispatchQueue.main.async {
                         self?.savedMessage = ok ? (note ?? "Saved to Photos ✓")
                             : denied ? "Allow Photos access in Settings to save videos"
@@ -287,6 +302,7 @@ final class VideoRecorder: NSObject, ObservableObject,
                 Telemetry.recordingFinished(reason: StopReason.writerFailed.rawValue,
                                             elapsed: recordedElapsed, unexpected: true,
                                             error: w.error)
+                backgroundTask?.end()
                 DispatchQueue.main.async { self?.savedMessage = "Recording failed (\(reason))" }
             }
         }
@@ -488,4 +504,33 @@ final class VideoRecorder: NSObject, ObservableObject,
     private static func renderBadge(bpm: Int, zone: Int, scale: CGFloat) -> CIImage {
         VideoOverlayRenderer.renderBadge(bpm: bpm, zone: zone, scale: scale)
     }
+}
+
+/// Keeps iOS from suspending the process while an interrupted recording is
+/// finalizing and being copied into Photos. Its locked `end` is safe from both
+/// the Photos callback and the background-time expiration callback.
+private final class RecordingBackgroundTask {
+    private let lock = NSLock()
+    private var identifier = UIBackgroundTaskIdentifier.invalid
+
+    init() {
+        precondition(Thread.isMainThread)
+        identifier = UIApplication.shared.beginBackgroundTask(withName: "Finish FightHR Recording") {
+            Telemetry.recordingSignal("video.background_time_expired")
+            self.end()
+        }
+    }
+
+    func end() {
+        lock.lock()
+        let task = identifier
+        identifier = .invalid
+        lock.unlock()
+        guard task != .invalid else { return }
+        DispatchQueue.main.async {
+            UIApplication.shared.endBackgroundTask(task)
+        }
+    }
+
+    deinit { end() }
 }

@@ -8,6 +8,7 @@ struct RecordingDiagnosticSnapshot: Codable, Equatable {
     let startedAt: Date
     var updatedAt: Date
     let orientation: String
+    var phase: String?
     var elapsedSeconds: Int
     var frameWidth: Int
     var frameHeight: Int
@@ -26,6 +27,7 @@ enum RecordingWatchdog {
                       defaults: UserDefaults = .standard) {
         let snapshot = RecordingDiagnosticSnapshot(
             id: UUID(), startedAt: now, updatedAt: now, orientation: orientation,
+            phase: "recording",
             elapsedSeconds: 0, frameWidth: 0, frameHeight: 0,
             encoderFailures: 0, captureDrops: 0, backpressureDrops: 0,
             thermalState: ProcessInfo.ThermalState.nominal.rawValue,
@@ -55,6 +57,13 @@ enum RecordingWatchdog {
 
     static func clear(defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: key)
+    }
+
+    static func markFinalizing(now: Date = Date(), defaults: UserDefaults = .standard) {
+        guard var snapshot = load(defaults: defaults) else { return }
+        snapshot.updatedAt = now
+        snapshot.phase = "finalizing"
+        save(snapshot, defaults: defaults)
     }
 
     /// Returns and removes the previous run's checkpoint atomically enough for

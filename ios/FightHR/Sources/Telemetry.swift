@@ -81,8 +81,9 @@ enum Telemetry {
     }
 
     static func recordingFinished(reason: String, elapsed: TimeInterval,
-                                  unexpected: Bool, error: Error? = nil) {
-        RecordingWatchdog.clear()
+                                  unexpected: Bool, error: Error? = nil,
+                                  clearCheckpoint: Bool = true) {
+        if clearCheckpoint { RecordingWatchdog.clear() }
         guard isEnabled else { return }
         let data: [String: Any] = [
             "reason": reason,
@@ -103,6 +104,7 @@ enum Telemetry {
     }
 
     static func videoSaved(ok: Bool, denied: Bool) {
+        RecordingWatchdog.clear()
         breadcrumb("video.photo_save_finished", level: ok ? .info : .error, data: [
             "success": ok,
             "permission_denied": denied,
@@ -129,6 +131,7 @@ enum Telemetry {
             "last_checkpoint_at": ISO8601DateFormatter().string(from: snapshot.updatedAt),
             "elapsed_seconds": snapshot.elapsedSeconds,
             "orientation": snapshot.orientation,
+            "phase": snapshot.phase ?? "recording",
             "frame_width": snapshot.frameWidth,
             "frame_height": snapshot.frameHeight,
             "consecutive_encoder_failures": snapshot.encoderFailures,

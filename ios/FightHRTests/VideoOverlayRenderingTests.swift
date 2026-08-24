@@ -66,11 +66,14 @@ enum VideoOverlayRenderingTests {
             thermalState: 1, memoryMB: 245, availableDiskMB: 9_876,
             now: checkpointAt, defaults: defaults
         )
+        let finalizingAt = checkpointAt.addingTimeInterval(1)
+        RecordingWatchdog.markFinalizing(now: finalizingAt, defaults: defaults)
 
         let snapshot = RecordingWatchdog.consume(defaults: defaults)
         try expect(snapshot != nil, "unclean recording checkpoint was not recovered")
         try expect(snapshot?.startedAt == startedAt, "recording start time was not preserved")
-        try expect(snapshot?.updatedAt == checkpointAt, "checkpoint time was not updated")
+        try expect(snapshot?.updatedAt == finalizingAt, "finalizing time was not updated")
+        try expect(snapshot?.phase == "finalizing", "recording phase was not persisted")
         try expect(snapshot?.elapsedSeconds == 90, "elapsed checkpoint was wrong")
         try expect(snapshot?.frameWidth == 1080 && snapshot?.frameHeight == 1920,
                    "frame dimensions were not preserved")
