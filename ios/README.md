@@ -60,7 +60,7 @@ The recorded-overlay orientation test must run inside a booted iOS Simulator:
 ```bash
 SDK_PATH=$(xcrun --sdk iphonesimulator --show-sdk-path)
 xcrun swiftc -sdk "$SDK_PATH" -target arm64-apple-ios16.0-simulator \
-  FightHR/Sources/{Theme,VideoOverlayRenderer}.swift \
+  FightHR/Sources/{Theme,VideoOverlayRenderer,RecordingWatchdog}.swift \
   FightHRTests/VideoOverlayRenderingTests.swift \
   -o /tmp/fighthr-overlay-tests
 xcrun simctl spawn booted /tmp/fighthr-overlay-tests
@@ -74,9 +74,11 @@ Sentry auth token is stored in the repository. Recording diagnostics include:
 
 - Camera interruptions, runtime errors, encoder stalls, and failed Photos saves.
 - A breadcrumb every 30 seconds with duration, frame size, dropped-frame counts,
-  encoder failures, and the phone's thermal state.
+  encoder failures, thermal state, memory footprint, and available disk space.
 - A stop reason distinguishing a user stop from backgrounding, camera failure,
   encoder failure, or the recording view closing.
+- A crash-resilient checkpoint. If iOS kills the process during recording, the
+  next launch emits one Sentry event with the last 30-second checkpoint.
 
 In a Debug build, launch with `--sentry-test-event` to send one controlled
 integration event. Release archives still need a Sentry auth token in CI or the
@@ -110,6 +112,7 @@ ios/
       Bells.swift            round bells + warning tones + haptics
       Components.swift       zone bars, HR chart, share sheet helpers
       Telemetry.swift        privacy-minimal Sentry diagnostics
+      RecordingWatchdog.swift crash-resilient recorder checkpoint
       VideoOverlayRenderer.swift tested badge drawing for recorded frames
       TrainView.swift        main training screen
       HistoryView.swift      history list + 8-week trend

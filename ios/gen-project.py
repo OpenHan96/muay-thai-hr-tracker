@@ -9,7 +9,8 @@ import os, hashlib
 
 DEVELOPMENT_TEAM = "9RYDT6H7V4"   # Eugene Han — update if the Apple team changes
 BUNDLE_ID = "com.fighthr.app"
-MARKETING_VERSION = "1.4"
+MARKETING_VERSION = "1.5"
+CURRENT_PROJECT_VERSION = "2"
 SENTRY_VERSION = "9.24.0"
 SENTRY_DSN = "https://06b6946af22dd3a4531d580a1157239e@o4511966563926016.ingest.de.sentry.io/4511966567792720"
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -44,7 +45,7 @@ def tgt_cfg(oid_, name):
 			buildSettings = {{
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = {CURRENT_PROJECT_VERSION};
 				DEVELOPMENT_TEAM = {DEVELOPMENT_TEAM};
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;

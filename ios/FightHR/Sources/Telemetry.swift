@@ -1,6 +1,7 @@
 import Foundation
 import SentrySwift
 import UIKit
+import Darwin
 
 /// Privacy-minimal diagnostics for failures that only happen on a real phone.
 /// The DSN is supplied through the SENTRY_DSN build setting; without it the
@@ -32,6 +33,7 @@ enum Telemetry {
             scope.setTag(value: UIDevice.current.systemVersion, key: "device.ios")
         }
         breadcrumb("app.telemetry_started")
+        reportUncleanRecordingExit()
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--sentry-test-event") {
             SentrySDK.capture(message: "FightHR Sentry integration test")
@@ -40,6 +42,7 @@ enum Telemetry {
     }
 
     static func recordingStarted(orientation: CaptureOrientation) {
+        RecordingWatchdog.begin(orientation: orientation.rawValue)
         guard isEnabled else { return }
         SentrySDK.configureScope { scope in
             scope.setTag(value: "true", key: "recording.active")
@@ -51,6 +54,15 @@ enum Telemetry {
     static func recordingHeartbeat(elapsed: TimeInterval, width: Int, height: Int,
                                    encoderFailures: Int, captureDrops: Int,
                                    backpressureDrops: Int) {
+        let thermalState = ProcessInfo.processInfo.thermalState.rawValue
+        let memoryMB = memoryFootprintMB()
+        let availableDiskMB = availableDiskMB()
+        RecordingWatchdog.heartbeat(
+            elapsed: elapsed, width: width, height: height,
+            encoderFailures: encoderFailures, captureDrops: captureDrops,
+            backpressureDrops: backpressureDrops, thermalState: thermalState,
+            memoryMB: memoryMB, availableDiskMB: availableDiskMB
+        )
         breadcrumb("video.recording_heartbeat", data: [
             "elapsed_seconds": Int(elapsed),
             "frame_width": width,
@@ -58,7 +70,9 @@ enum Telemetry {
             "consecutive_encoder_failures": encoderFailures,
             "capture_drops": captureDrops,
             "backpressure_drops": backpressureDrops,
-            "thermal_state": ProcessInfo.processInfo.thermalState.rawValue,
+            "thermal_state": thermalState,
+            "memory_mb": memoryMB,
+            "available_disk_mb": availableDiskMB,
         ])
     }
 
@@ -68,6 +82,7 @@ enum Telemetry {
 
     static func recordingFinished(reason: String, elapsed: TimeInterval,
                                   unexpected: Bool, error: Error? = nil) {
+        RecordingWatchdog.clear()
         guard isEnabled else { return }
         let data: [String: Any] = [
             "reason": reason,
@@ -104,5 +119,50 @@ enum Telemetry {
         crumb.message = message
         for (key, value) in data { crumb.setData(value: value, key: key) }
         SentrySDK.addBreadcrumb(crumb)
+    }
+
+    private static func reportUncleanRecordingExit() {
+        guard let snapshot = RecordingWatchdog.consume() else { return }
+        let data: [String: Any] = [
+            "recording_id": snapshot.id.uuidString,
+            "started_at": ISO8601DateFormatter().string(from: snapshot.startedAt),
+            "last_checkpoint_at": ISO8601DateFormatter().string(from: snapshot.updatedAt),
+            "elapsed_seconds": snapshot.elapsedSeconds,
+            "orientation": snapshot.orientation,
+            "frame_width": snapshot.frameWidth,
+            "frame_height": snapshot.frameHeight,
+            "consecutive_encoder_failures": snapshot.encoderFailures,
+            "capture_drops": snapshot.captureDrops,
+            "backpressure_drops": snapshot.backpressureDrops,
+            "thermal_state": snapshot.thermalState,
+            "memory_mb": snapshot.memoryMB,
+            "available_disk_mb": snapshot.availableDiskMB,
+        ]
+        SentrySDK.capture(message: "Previous app run ended during video recording") { scope in
+            scope.setTag(value: "true", key: "recording.previous_unclean_exit")
+            scope.setTag(value: snapshot.orientation, key: "recording.orientation")
+            scope.setContext(value: data, key: "recording_last_checkpoint")
+        }
+    }
+
+    private static func memoryFootprintMB() -> Int {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(
+            MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size
+        )
+        let result = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        guard result == KERN_SUCCESS else { return -1 }
+        return Int(info.phys_footprint / 1_048_576)
+    }
+
+    private static func availableDiskMB() -> Int {
+        let home = URL(fileURLWithPath: NSHomeDirectory())
+        let values = try? home.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        guard let bytes = values?.volumeAvailableCapacityForImportantUsage else { return -1 }
+        return Int(bytes / 1_048_576)
     }
 }

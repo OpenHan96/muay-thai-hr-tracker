@@ -33,9 +33,15 @@ GPS, use round timers, or play bells.
 
 - Version 1.4 fixes the vertically inverted BPM badge in saved recordings by
   removing an incorrect second Core Image Y-axis flip.
+- Version 1.5 (build 2) adds crash-resilient recording checkpoints and narrows
+  automatic stopping from every inactive transition to actual backgrounding.
 - The capture pipeline now discards late camera frames instead of building an
   unbounded queue, records capture/backpressure/encoder drop counts, and reports
   30-second recording heartbeats plus stop reasons to Sentry.
+- Temporary inactive transitions no longer end a recording; only actual
+  backgrounding does. A persisted 30-second checkpoint reports an unclean
+  recording exit on the next launch with memory, disk, thermal, and frame-load
+  evidence.
 - Sentry Cocoa is integrated through Swift Package Manager. A controlled Debug
   event was received by the `apple-ios` Sentry project. No Sentry auth token is
   stored in the repository.

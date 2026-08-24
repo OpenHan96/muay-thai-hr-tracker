@@ -40,7 +40,7 @@ final class VideoRecorder: NSObject, ObservableObject,
     private enum StopReason: String {
         case user
         case viewClosed = "view_closed"
-        case appInactive = "app_inactive"
+        case appBackgrounded = "app_backgrounded"
         case captureInterrupted = "capture_interrupted"
         case captureRuntimeError = "capture_runtime_error"
         case encoderStalled = "encoder_stalled"
@@ -124,7 +124,12 @@ final class VideoRecorder: NSObject, ObservableObject,
         let nc = NotificationCenter.default
         observers.append(nc.addObserver(forName: UIApplication.willResignActiveNotification,
                                         object: nil, queue: .main) { [weak self] _ in
-            self?.finish(note: "Interrupted — video saved", reason: .appInactive)
+            guard self?.isRecording == true else { return }
+            Telemetry.recordingSignal("video.app_became_inactive")
+        })
+        observers.append(nc.addObserver(forName: UIApplication.didEnterBackgroundNotification,
+                                        object: nil, queue: .main) { [weak self] _ in
+            self?.finish(note: "Backgrounded — video saved", reason: .appBackgrounded)
         })
         observers.append(nc.addObserver(forName: AVCaptureSession.wasInterruptedNotification,
                                         object: session, queue: .main) { [weak self] notification in
@@ -254,10 +259,11 @@ final class VideoRecorder: NSObject, ObservableObject,
             adaptor = nil; startPTS = .invalid; fileURL = nil
         }
         guard let w = writer, let url = fileURL, w.status == .writing else {
-            let reason = writer?.error?.localizedDescription ?? "no video frames captured"
+            let failure = error ?? writer?.error
+            let reason = failure?.localizedDescription ?? "no video frames captured"
             Telemetry.recordingFinished(reason: StopReason.writerFailed.rawValue,
                                         elapsed: recordedElapsed, unexpected: true,
-                                        error: writer?.error)
+                                        error: failure)
             DispatchQueue.main.async { self.savedMessage = "Recording failed (\(reason))" }
             return
         }
@@ -287,13 +293,13 @@ final class VideoRecorder: NSObject, ObservableObject,
     }
 
     /// Build the writer sized to the actual frame (called on first video buffer).
-    private func setupWriter(width: Int, height: Int) {
+    private func setupWriter(width: Int, height: Int) throws {
         frameWidth = width
         frameHeight = height
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("fighthr-\(Int(Date().timeIntervalSince1970)).mov")
         try? FileManager.default.removeItem(at: url)
-        guard let w = try? AVAssetWriter(outputURL: url, fileType: .mov) else { return }
+        let w = try AVAssetWriter(outputURL: url, fileType: .mov)
         let vSettings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.h264,
             AVVideoWidthKey: width, AVVideoHeightKey: height,
@@ -305,15 +311,33 @@ final class VideoRecorder: NSObject, ObservableObject,
         ]
         let aIn = AVAssetWriterInput(mediaType: .audio, outputSettings: aSettings)
         aIn.expectsMediaDataInRealTime = true
-        if w.canAdd(vIn) { w.add(vIn) }
-        if w.canAdd(aIn) { w.add(aIn) }
+        guard w.canAdd(vIn) else { throw RecorderError.cannotAddVideoInput }
+        w.add(vIn)
+        let acceptedAudioInput: AVAssetWriterInput?
+        if w.canAdd(aIn) {
+            w.add(aIn)
+            acceptedAudioInput = aIn
+        } else {
+            acceptedAudioInput = nil
+            Telemetry.recordingSignal("video.audio_writer_input_unavailable")
+        }
         let attrs: [String: Any] = [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
             kCVPixelBufferWidthKey as String: width,
             kCVPixelBufferHeightKey as String: height,
         ]
         self.adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: vIn, sourcePixelBufferAttributes: attrs)
-        self.writer = w; self.videoIn = vIn; self.audioIn = aIn; self.fileURL = url
+        self.writer = w; self.videoIn = vIn; self.audioIn = acceptedAudioInput; self.fileURL = url
+    }
+
+    private enum RecorderError: LocalizedError {
+        case cannotAddVideoInput
+
+        var errorDescription: String? {
+            switch self {
+            case .cannotAddVideoInput: return "The video encoder rejected the camera format."
+            }
+        }
     }
 
     private static func saveToPhotos(_ url: URL, done: @escaping (_ ok: Bool, _ denied: Bool) -> Void) {
@@ -348,23 +372,20 @@ final class VideoRecorder: NSObject, ObservableObject,
         // Build the writer on the first video frame, sized to that frame.
         if pendingStart {
             guard output == videoOut, let px = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-            setupWriter(width: CVPixelBufferGetWidth(px), height: CVPixelBufferGetHeight(px))
             pendingStart = false
+            do {
+                try setupWriter(width: CVPixelBufferGetWidth(px), height: CVPixelBufferGetHeight(px))
+            } catch {
+                finishOnQueue(note: nil, reason: .writerFailed, error: error)
+                return
+            }
         }
         guard let w = writer else { return }
         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         if startPTS == .invalid {
             guard output == videoOut else { return }   // start the timeline on a video frame
             guard w.startWriting() else {
-                let reason = w.error?.localizedDescription ?? "writer error"
-                active = false
-                writer = nil; videoIn = nil; audioIn = nil; adaptor = nil
-                DispatchQueue.main.async {
-                    self.isRecording = false
-                    self.savedMessage = "Recording failed (\(reason))"
-                }
-                Telemetry.recordingFinished(reason: StopReason.writerFailed.rawValue,
-                                            elapsed: 0, unexpected: true, error: w.error)
+                finishOnQueue(note: nil, reason: .writerFailed, error: w.error)
                 return
             }
             w.startSession(atSourceTime: pts)
@@ -394,27 +415,44 @@ final class VideoRecorder: NSObject, ObservableObject,
     }
 
     private func appendVideo(_ sb: CMSampleBuffer, pts: CMTime) {
-        guard let vIn = videoIn, let adaptor, let pool = adaptor.pixelBufferPool,
-              let src = CMSampleBufferGetImageBuffer(sb) else { return }
+        guard let vIn = videoIn, let adaptor,
+              let src = CMSampleBufferGetImageBuffer(sb) else {
+            recordEncoderFailure("missing writer input, adaptor, or camera buffer")
+            return
+        }
         guard vIn.isReadyForMoreMediaData else {
             backpressureDroppedFrames += 1
             return
         }
+        guard let pool = adaptor.pixelBufferPool else {
+            recordEncoderFailure("pixel buffer pool unavailable")
+            return
+        }
         // draw overlay onto the camera frame, into a fresh writable buffer from the pool
         var out: CVPixelBuffer?
-        CVPixelBufferPoolCreatePixelBuffer(nil, pool, &out)
-        guard let dst = out else { return }
+        let allocation = CVPixelBufferPoolCreatePixelBuffer(nil, pool, &out)
+        guard allocation == kCVReturnSuccess, let dst = out else {
+            recordEncoderFailure("pixel buffer allocation failed (\(allocation))")
+            return
+        }
         let composited = overlay(on: CIImage(cvPixelBuffer: src))
         ciContext.render(composited, to: dst)
         if !adaptor.append(dst, withPresentationTime: pts) {
-            droppedFrames += 1
-            // A handful of drops is normal under load; a sustained failure
-            // means the writer is dead and the file will be unusable.
-            if droppedFrames > 90 {
-                finishOnQueue(note: "Recording ended early (encoder stalled)", reason: .encoderStalled)
-            }
+            recordEncoderFailure("asset writer rejected a rendered frame")
         } else {
             droppedFrames = 0
+        }
+    }
+
+    private func recordEncoderFailure(_ detail: String) {
+        droppedFrames += 1
+        if droppedFrames == 1 {
+            Telemetry.recordingSignal("video.encoder_frame_failed", data: ["detail": detail])
+        }
+        // A handful of drops is normal under load; sustained failures mean the
+        // writer is no longer producing a usable file.
+        if droppedFrames > 90 {
+            finishOnQueue(note: "Recording ended early (encoder stalled)", reason: .encoderStalled)
         }
     }
     private var droppedFrames = 0

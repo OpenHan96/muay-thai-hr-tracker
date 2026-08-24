@@ -6,6 +6,7 @@ import UIKit
 enum VideoOverlayRenderingTests {
     static func run() throws {
         try badgeIsUprightInWriterPixelBuffer()
+        try recordingWatchdogSurvivesAndConsumesAnUncleanExit()
         print("VideoOverlayRenderingTests: all tests passed")
     }
 
@@ -47,6 +48,38 @@ enum VideoOverlayRenderingTests {
         try expect(redCount > 20 && blueCount > 20, "badge colors were not rendered")
         try expect(redY / redCount < blueY / blueCount,
                    "BPM badge is vertically inverted in the writer pixel buffer")
+    }
+
+    private static func recordingWatchdogSurvivesAndConsumesAnUncleanExit() throws {
+        let suite = "fighthr.recording-watchdog-tests.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suite) else {
+            throw TestFailure(message: "could not create isolated UserDefaults")
+        }
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let startedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let checkpointAt = startedAt.addingTimeInterval(90)
+        RecordingWatchdog.begin(orientation: "portrait", now: startedAt, defaults: defaults)
+        RecordingWatchdog.heartbeat(
+            elapsed: 90.8, width: 1080, height: 1920,
+            encoderFailures: 2, captureDrops: 3, backpressureDrops: 4,
+            thermalState: 1, memoryMB: 245, availableDiskMB: 9_876,
+            now: checkpointAt, defaults: defaults
+        )
+
+        let snapshot = RecordingWatchdog.consume(defaults: defaults)
+        try expect(snapshot != nil, "unclean recording checkpoint was not recovered")
+        try expect(snapshot?.startedAt == startedAt, "recording start time was not preserved")
+        try expect(snapshot?.updatedAt == checkpointAt, "checkpoint time was not updated")
+        try expect(snapshot?.elapsedSeconds == 90, "elapsed checkpoint was wrong")
+        try expect(snapshot?.frameWidth == 1080 && snapshot?.frameHeight == 1920,
+                   "frame dimensions were not preserved")
+        try expect(snapshot?.encoderFailures == 2 && snapshot?.captureDrops == 3
+                   && snapshot?.backpressureDrops == 4, "frame-pressure counters were wrong")
+        try expect(snapshot?.memoryMB == 245 && snapshot?.availableDiskMB == 9_876,
+                   "resource checkpoint was wrong")
+        try expect(RecordingWatchdog.consume(defaults: defaults) == nil,
+                   "consumed checkpoint should not be reported twice")
     }
 
     private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
