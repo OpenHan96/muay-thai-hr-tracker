@@ -1,6 +1,6 @@
 # US Muay Thai Heart HR Tracker — Development Handoff
 
-Updated: 2026-08-25
+Updated: 2026-08-26
 
 ## Canonical repository
 
@@ -50,6 +50,14 @@ GPS, use round timers, or play bells.
 - Sentry Cocoa is integrated through Swift Package Manager. A controlled Debug
   event was received by the `apple-ios` Sentry project. No Sentry auth token is
   stored in the repository.
+- Read-only Sentry API access was verified on 2026-08-26. The only unresolved
+  event in `debug` is the controlled simulator integration test (`APPLE-IOS-1`),
+  and the `production` and `prod` environments contain no events. There is no
+  physical-device recording failure in Sentry yet, so the original auto-stop
+  cannot be attributed to a new code path without another device recording.
+- The controlled simulator event has a missing debug dSYM warning. Release dSYM
+  upload is not automated; keep auth credentials outside this repository if that
+  is configured later.
 - A simulator pixel-buffer regression test verifies that the red heart remains
   above the blue zone pill in the exact renderer used for recorded frames.
 
@@ -88,10 +96,13 @@ If Swift Package Manager pauses while checking credentials, add
 `-packageAuthorizationProvider netrc`. For the overlay regression test, use the
 command documented in `ios/README.md`; it requires a booted iOS Simulator.
 
-The remaining device-only validation is a several-minute recording on a physical
-iPhone. If it stops, inspect the newest Sentry event's `recording.stop_reason` tag
-and the preceding `video.recording_heartbeat` breadcrumbs. Release dSYM upload is
-not automated yet and needs a Sentry auth token supplied outside the repository.
+The remaining device-only validation is a 5–10 minute recording on a physical
+iPhone with the camera visible and heart-rate overlay changing. Confirm that the
+saved Photos video stays upright and that the app does not stop early. If it does
+stop, leave the app installed, relaunch it once, and inspect the newest Sentry
+event's `recording.stop_reason` tag plus preceding
+`video.recording_heartbeat` breadcrumbs. Relaunching reports a persisted unclean
+recording checkpoint when iOS terminated the app before it could report normally.
 
 ## Branding note
 
