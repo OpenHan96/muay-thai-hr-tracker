@@ -7,6 +7,7 @@ enum VideoOverlayRenderingTests {
     static func run() throws {
         try badgeIsUprightInWriterPixelBuffer()
         try recordingWatchdogSurvivesAndConsumesAnUncleanExit()
+        try longRecordingSuccessTelemetryPolicyHasCorrectBoundary()
         print("VideoOverlayRenderingTests: all tests passed")
     }
 
@@ -83,6 +84,21 @@ enum VideoOverlayRenderingTests {
                    "resource checkpoint was wrong")
         try expect(RecordingWatchdog.consume(defaults: defaults) == nil,
                    "consumed checkpoint should not be reported twice")
+    }
+
+    private static func longRecordingSuccessTelemetryPolicyHasCorrectBoundary() throws {
+        try expect(!RecordingTelemetryPolicy.shouldCaptureSuccessfulSave(
+            ok: true, unexpected: false, elapsed: 119.9
+        ), "short successful recordings should not create Sentry events")
+        try expect(RecordingTelemetryPolicy.shouldCaptureSuccessfulSave(
+            ok: true, unexpected: false, elapsed: 120
+        ), "a two-minute successful recording should be remotely verifiable")
+        try expect(!RecordingTelemetryPolicy.shouldCaptureSuccessfulSave(
+            ok: false, unexpected: false, elapsed: 600
+        ), "failed saves must not be reported as successes")
+        try expect(!RecordingTelemetryPolicy.shouldCaptureSuccessfulSave(
+            ok: true, unexpected: true, elapsed: 600
+        ), "unexpected stops already have a failure event")
     }
 
     private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {

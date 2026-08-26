@@ -37,6 +37,10 @@ GPS, use round timers, or play bells.
   automatic stopping from every inactive transition to actual backgrounding.
 - Version 1.6 (build 3) protects writer finalization and Photos saving with an
   iOS background task, including interruption-before-background race handling.
+- Version 1.7 (build 4) emits one privacy-safe Sentry info event after a
+  successful recording of at least two minutes. This provides positive evidence
+  for the long-recording device test; short clips and unexpected stops do not
+  create duplicate success events.
 - The capture pipeline now discards late camera frames instead of building an
   unbounded queue, records capture/backpressure/encoder drop counts, and reports
   30-second recording heartbeats plus stop reasons to Sentry.
@@ -96,13 +100,15 @@ If Swift Package Manager pauses while checking credentials, add
 `-packageAuthorizationProvider netrc`. For the overlay regression test, use the
 command documented in `ios/README.md`; it requires a booted iOS Simulator.
 
-The remaining device-only validation is a 5–10 minute recording on a physical
-iPhone with the camera visible and heart-rate overlay changing. Confirm that the
-saved Photos video stays upright and that the app does not stop early. If it does
-stop, leave the app installed, relaunch it once, and inspect the newest Sentry
-event's `recording.stop_reason` tag plus preceding
-`video.recording_heartbeat` breadcrumbs. Relaunching reports a persisted unclean
-recording checkpoint when iOS terminated the app before it could report normally.
+The remaining device-only validation is installing version 1.7 (build 4), then
+making a 5–10 minute recording on a physical iPhone with the camera visible and
+heart-rate overlay changing. Confirm that the saved Photos video stays upright
+and that the app does not stop early. A successful save lasting at least two
+minutes emits `Long video recording saved successfully` in Sentry. If it stops,
+leave the app installed, relaunch it once, and inspect the newest Sentry event's
+`recording.stop_reason` tag plus preceding `video.recording_heartbeat`
+breadcrumbs. Relaunching reports a persisted unclean recording checkpoint when
+iOS terminated the app before it could report normally.
 
 ## Branding note
 

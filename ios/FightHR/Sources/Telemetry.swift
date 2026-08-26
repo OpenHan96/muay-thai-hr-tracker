@@ -103,14 +103,35 @@ enum Telemetry {
         }
     }
 
-    static func videoSaved(ok: Bool, denied: Bool) {
+    static func videoSaved(ok: Bool, denied: Bool, elapsed: TimeInterval,
+                           stopReason: String, unexpected: Bool,
+                           width: Int, height: Int,
+                           encoderFailures: Int, captureDrops: Int,
+                           backpressureDrops: Int) {
         RecordingWatchdog.clear()
-        breadcrumb("video.photo_save_finished", level: ok ? .info : .error, data: [
+        let data: [String: Any] = [
             "success": ok,
             "permission_denied": denied,
-        ])
+            "elapsed_seconds": Int(elapsed),
+            "stop_reason": stopReason,
+            "frame_width": width,
+            "frame_height": height,
+            "consecutive_encoder_failures": encoderFailures,
+            "capture_drops": captureDrops,
+            "backpressure_drops": backpressureDrops,
+        ]
+        breadcrumb("video.photo_save_finished", level: ok ? .info : .error, data: data)
         if isEnabled && !ok && !denied {
             SentrySDK.capture(message: "Video failed to save to Photos")
+        }
+        guard isEnabled,
+              RecordingTelemetryPolicy.shouldCaptureSuccessfulSave(
+                ok: ok, unexpected: unexpected, elapsed: elapsed
+              ) else { return }
+        SentrySDK.capture(message: "Long video recording saved successfully") { scope in
+            scope.setTag(value: "success", key: "recording.result")
+            scope.setTag(value: stopReason, key: "recording.stop_reason")
+            scope.setContext(value: data, key: "recording_result")
         }
     }
 

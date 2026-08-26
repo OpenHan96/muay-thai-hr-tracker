@@ -84,3 +84,15 @@ enum RecordingWatchdog {
         defaults.set(data, forKey: key)
     }
 }
+
+/// Keeps routine short clips out of Sentry while making the long-running
+/// device test remotely verifiable. Unexpected stops already emit their own
+/// failure event, so a second success event would only add noise.
+enum RecordingTelemetryPolicy {
+    static let longRecordingThreshold: TimeInterval = 120
+
+    static func shouldCaptureSuccessfulSave(ok: Bool, unexpected: Bool,
+                                            elapsed: TimeInterval) -> Bool {
+        ok && !unexpected && elapsed >= longRecordingThreshold
+    }
+}

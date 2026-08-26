@@ -264,6 +264,11 @@ final class VideoRecorder: NSObject, ObservableObject,
         active = false
         pendingStart = false
         let recordedElapsed = startPTS == .invalid ? 0 : Double(max(0, lastElapsedWhole))
+        let recordedWidth = frameWidth
+        let recordedHeight = frameHeight
+        let recordedEncoderFailures = droppedFrames
+        let recordedCaptureDrops = captureDroppedFrames
+        let recordedBackpressureDrops = backpressureDroppedFrames
         DispatchQueue.main.async { self.isRecording = false }
         defer {
             writer = nil; videoIn = nil; audioIn = nil
@@ -289,7 +294,14 @@ final class VideoRecorder: NSObject, ObservableObject,
         w.finishWriting { [weak self] in
             if w.status == .completed {
                 VideoRecorder.saveToPhotos(url) { ok, denied in
-                    Telemetry.videoSaved(ok: ok, denied: denied)
+                    Telemetry.videoSaved(
+                        ok: ok, denied: denied, elapsed: recordedElapsed,
+                        stopReason: reason.rawValue, unexpected: reason.unexpected,
+                        width: recordedWidth, height: recordedHeight,
+                        encoderFailures: recordedEncoderFailures,
+                        captureDrops: recordedCaptureDrops,
+                        backpressureDrops: recordedBackpressureDrops
+                    )
                     backgroundTask?.end()
                     DispatchQueue.main.async {
                         self?.savedMessage = ok ? (note ?? "Saved to Photos ✓")

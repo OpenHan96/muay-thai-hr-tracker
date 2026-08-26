@@ -82,6 +82,10 @@ Sentry auth token is stored in the repository. Recording diagnostics include:
   whether capture or finalization was in progress.
 - Background time is requested while an interrupted recording is finalized and
   copied into Photos, and the checkpoint is cleared only after that completes.
+- A successfully saved recording lasting at least two minutes emits one
+  privacy-safe info event with duration, dimensions, and frame-pressure counts.
+  This makes a long physical-device test verifiable even when nothing fails;
+  short clips do not create Sentry events.
 
 In a Debug build, launch with `--sentry-test-event` to send one controlled
 integration event. Release archives still need a Sentry auth token in CI or the
